@@ -10,6 +10,10 @@ class AuthRepository {
     return await User.findOne({ email });
   }
 
+  async findUserByRefreshToken(refreshToken) {
+    return await User.findOne({ refreshToken });
+  }
+
   async updateRefreshToken(userId, refreshToken) {
     return await User.findByIdAndUpdate(
       userId,

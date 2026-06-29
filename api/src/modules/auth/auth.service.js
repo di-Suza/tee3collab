@@ -48,6 +48,40 @@ class AuthService {
       refreshToken,
     };
   }
+
+  async refreshTokens(refreshToken) {
+    if (!refreshToken) {
+      throw new AppError("Refresh token is required", 401);
+    }
+
+    const dbUser = await this.authRepository.findUserByRefreshToken(refreshToken);
+    if (!dbUser) {
+      throw new AppError("Invalid refresh token", 401);
+    }
+
+    const payload = {
+      id: dbUser._id,
+      email: dbUser.email,
+      name: dbUser.name,
+      picture: dbUser.picture,
+    };
+
+    const accessToken = jwt.sign(payload, EnvConfig.get("JWT_ACCESS_SECRET"), {
+      expiresIn: EnvConfig.get("JWT_ACCESS_EXPIRES_IN"),
+    });
+
+    const newRefreshToken = crypto.randomBytes(64).toString("hex");
+    const userWithToken = await this.authRepository.updateRefreshToken(
+      dbUser._id,
+      newRefreshToken,
+    );
+
+    return {
+      user: userWithToken,
+      accessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
 }
 
 export { AuthService };

@@ -70,6 +70,39 @@ class AuthController {
       next(error);
     }
   }
+
+  async refreshToken(req, res, next) {
+    try {
+      const refreshToken =
+        (req.cookies && req.cookies.refreshToken) || req.body?.refreshToken || req.headers["x-refresh-token"];
+
+      const result = await this.authService.refreshTokens(refreshToken);
+
+      res.cookie("accessToken", result.accessToken, {
+        httpOnly: true,
+        secure: EnvConfig.get("NODE_ENV") === "production",
+        sameSite: "strict",
+        maxAge: 24 * 60 * 60 * 1000,
+      });
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: EnvConfig.get("NODE_ENV") === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          user: result.user,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export { AuthController };
