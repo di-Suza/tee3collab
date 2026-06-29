@@ -1,29 +1,59 @@
-import {AuthService} from "./auth.service.js";
-import {EnvConfig} from "../../config/env.js";
+import { AuthService } from "./auth.service.js";
+import { AppError } from "../../shared/errors/AppError.js";
+import { EnvConfig } from "../../config/env.js";
+
 class AuthController {
-constructor(authService) {
-   this.authService = new AuthService();
+  constructor(authService) {
+    this.authService = authService || new AuthService();
+  }
 
-}
+  async GoogleCallback(req, res, next) {
+    try {
+      const userPayload = req.user;
+      if (!userPayload || !userPayload.profile) {
+        throw new AppError("Google authentication failed", 401);
+      }
 
-async GoogleCallBack(req,res){
-const {user}=await this.authService.createUser(req.body)
-res.cookie("accessToken",user.accessToken,{
-httpOnly:true,
-secure:EnvConfig.get("NODE_ENV")==="production",
-sameSite:"strict",
-maxAge:24*60*60*1000
-})
-res.cookie("refreshToken",user.refreshToken,{
-httpOnly:true,
-secure:EnvConfig.get("NODE_ENV")==="production",
-sameSite:"strict",
-maxAge:7*24*60*60*1000
-})
-res.redirect(`${EnvConfig.get("FRONTEND_URL")}/auth/success?accessToken=${user.accessToken}&refreshToken=${user.refreshToken}`)
-}
-}
+      const { profile, googleAccessToken, googleRefreshToken } = userPayload;
+      const email = profile?.emails?.[0]?.value;
+      if (!email) {
+        throw new AppError("Google profile email is required", 400);
+      }
 
+      const result = await this.authService.createUser({
+        emails: [{ value: email }],
+        photos: [{ value: profile?.photos?.[0]?.value }],
+        displayName: profile?.displayName || profile?.displayName || "",
+      });
+
+      res.cookie("accessToken", result.accessToken, {
+        httpOnly: true,
+        secure: EnvConfig.get("NODE_ENV") === "production",
+        sameSite: "strict",
+        maxAge: 24 * 60 * 60 * 1000,
+      });
+      res.cookie("refreshToken", result.refreshToken, {
+        httpOnly: true,
+        secure: EnvConfig.get("NODE_ENV") === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          user: result.user,
+          appAccessToken: result.accessToken,
+          appRefreshToken: result.refreshToken,
+          googleAccessToken,
+          googleRefreshToken,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+}
 
 export { AuthController };
 export default AuthController;
