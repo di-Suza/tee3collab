@@ -1,11 +1,12 @@
 import { AppError } from "../../shared/errors/AppError.js";
-import { PatchUtil } from "../../shared/utils/patch.js";
 import { DocumentDTO } from "./document.dto.js";
 import { DocumentRepository } from "./document.repository.js";
+import { SyncEngineService } from "./syncEngine.service.js";
 
 class DocumentService {
-  constructor(documentRepository) {
+  constructor(documentRepository, syncEngineService) {
     this.documentRepository = documentRepository || new DocumentRepository();
+    this.syncEngineService = syncEngineService || new SyncEngineService();
   }
 
   async getSnapshot(roomCode) {
@@ -29,8 +30,8 @@ class DocumentService {
       throw new AppError("Room not found", 404, "ROOM_NOT_FOUND");
     }
 
-    const patch = PatchUtil.normalize(patchPayload);
-    const nextContent = PatchUtil.apply(document.content, patch);
+    const { patch, conflict } = this.syncEngineService.preparePatch(patchPayload, document);
+    const nextContent = this.syncEngineService.applyPatch(document.content, patch);
     const savedDocument = await this.documentRepository.savePatch(
       document,
       nextContent,
@@ -41,6 +42,7 @@ class DocumentService {
     return DocumentDTO.patchAccepted(savedDocument, {
       ...patch,
       version: savedDocument.version,
+      conflict,
     });
   }
 }

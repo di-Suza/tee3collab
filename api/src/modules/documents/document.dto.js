@@ -19,10 +19,13 @@ class DocumentDTO {
   }
 
   static patchAccepted(document, appliedPatch) {
+    const { conflict, ...patch } = appliedPatch;
+
     return {
       roomCode: document.roomCode,
       version: document.version,
-      patch: appliedPatch,
+      patch,
+      conflict: conflict || null,
       updatedAt: document.updatedAt,
     };
   }

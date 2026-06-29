@@ -19,6 +19,16 @@ class DocumentInterface {
     };
   }
 
+  static conflict() {
+    return {
+      type: "POSITION_SHIFT",
+      reason: "string",
+      baseVersion: "number",
+      serverVersion: "number",
+      transformedBy: "Array<{ version, from, to }>",
+    };
+  }
+
   static patchHistoryEntry() {
     return {
       version: "number",

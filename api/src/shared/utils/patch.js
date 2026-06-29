@@ -47,6 +47,49 @@ class PatchUtil {
       content.slice(deleteEnd)
     );
   }
+
+  static transformAgainstHistory(patch, patchHistory = []) {
+    let nextPosition = patch.position;
+    const transformedBy = [];
+
+    for (const historicalPatch of patchHistory) {
+      if (historicalPatch.version <= patch.baseVersion) {
+        continue;
+      }
+
+      const oldPosition = nextPosition;
+      const historyPosition = historicalPatch.position;
+      const historyDeleteCount = historicalPatch.deleteCount || 0;
+      const historyInsertLength = historicalPatch.insertTextLength || 0;
+      const historyDeleteEnd = historyPosition + historyDeleteCount;
+
+      if (historyDeleteCount > 0 && nextPosition > historyPosition) {
+        if (nextPosition <= historyDeleteEnd) {
+          nextPosition = historyPosition;
+        } else {
+          nextPosition -= historyDeleteCount;
+        }
+      }
+
+      if (historyInsertLength > 0 && historyPosition <= nextPosition) {
+        nextPosition += historyInsertLength;
+      }
+
+      if (oldPosition !== nextPosition) {
+        transformedBy.push({
+          version: historicalPatch.version,
+          from: oldPosition,
+          to: nextPosition,
+        });
+      }
+    }
+
+    return {
+      ...patch,
+      position: Math.max(0, nextPosition),
+      transformedBy,
+    };
+  }
 }
 
 export { PatchUtil };
