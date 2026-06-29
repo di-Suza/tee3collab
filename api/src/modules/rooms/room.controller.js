@@ -23,11 +23,7 @@ class RoomController {
 
       return res.status(201).json({
         success: true,
-        data: {
-          room: result.room,
-          roomCode: result.roomCode,
-          joinLink: result.joinLink,
-        },
+        data: result,
       });
     } catch (error) {
       next(error);
@@ -78,6 +74,45 @@ class RoomController {
       return res.json({
         success: true,
         data: { room },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async joinByInvite(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const joined = await this.roomService.joinRoomByInvite({
+        roomCode: req.body.roomCode,
+        userId: user.id,
+      });
+
+      return res.json({
+        success: true,
+        data: { room: joined },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async history(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const history = await this.roomService.getHistory(user.id);
+
+      return res.json({
+        success: true,
+        data: history,
       });
     } catch (error) {
       next(error);

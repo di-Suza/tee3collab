@@ -21,6 +21,14 @@ class AuthRepository {
       { new: true },
     );
   }
+
+  async updateProfile(userId, profileData) {
+    return await User.findByIdAndUpdate(
+      userId,
+      { $set: profileData },
+      { new: true, runValidators: true },
+    );
+  }
 }
 
 export { AuthRepository };

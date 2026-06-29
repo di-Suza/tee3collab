@@ -23,6 +23,10 @@ class AuthCookieUtil {
     res.cookie("accessToken", accessToken, this.accessTokenOptions());
     res.cookie("refreshToken", refreshToken, this.refreshTokenOptions());
   }
+
+  static setAccessTokenCookie(res, accessToken) {
+    res.cookie("accessToken", accessToken, this.accessTokenOptions());
+  }
 }
 
 export { AuthCookieUtil };

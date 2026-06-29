@@ -1,7 +1,12 @@
 import { Router } from "express";
 import RoomController from "./room.controller.js";
 import AuthMiddleware from "../../shared/middleware/auth.js";
-import { validateCreate, validateJoin, validateRoomCodeParam } from "./room.validator.js";
+import {
+  validateCreate,
+  validateJoin,
+  validateJoinInvite,
+  validateRoomCodeParam,
+} from "./room.validator.js";
 
 class RoomRoute {
   constructor() {
@@ -24,6 +29,17 @@ class RoomRoute {
       AuthMiddleware.handle,
       validateJoin,
       this.controller.join.bind(this.controller),
+    );
+    this.router.post(
+      "/join-link",
+      AuthMiddleware.handle,
+      validateJoinInvite,
+      this.controller.joinByInvite.bind(this.controller),
+    );
+    this.router.get(
+      "/history",
+      AuthMiddleware.handle,
+      this.controller.history.bind(this.controller),
     );
     this.router.patch(
       "/:roomCode/close",

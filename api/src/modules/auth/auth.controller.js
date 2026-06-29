@@ -72,6 +72,32 @@ class AuthController {
       next(error);
     }
   }
+
+  async updateMe(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const result = await this.authService.updateProfile(user.id, {
+        name: req.body?.name,
+        picture: req.body?.picture,
+      });
+
+      AuthCookieUtil.setAccessTokenCookie(res, result.accessToken);
+
+      return res.json({
+        success: true,
+        data: {
+          user: result.user,
+          accessToken: result.accessToken,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export { AuthController };
