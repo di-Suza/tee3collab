@@ -1,3 +1,63 @@
+import { AppError } from "../../shared/errors/AppError.js";
+
+const ROOM_CODE_REGEX = /^[A-HJ-NP-Z2-9]{6}$/;
+
+function validateCreate(req, _res, next) {
+  try {
+    const members = req.body?.members;
+    if (members !== undefined) {
+      if (!Array.isArray(members)) {
+        throw new AppError("members must be an array", 400);
+      }
+      for (const m of members) {
+        if (typeof m !== "string" || !m.trim()) {
+          throw new AppError("each member must be a non-empty user id string", 400);
+        }
+      }
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function validateJoin(req, _res, next) {
+  try {
+    let { roomCode, password, link } = req.body || {};
+
+    if (!roomCode && !link) {
+      throw new AppError("roomCode or link is required", 400);
+    }
+
+    if (!password) {
+      throw new AppError("password is required", 400);
+    }
+
+    if (!roomCode && link) {
+      try {
+        const parts = String(link).split("/").filter(Boolean);
+        roomCode = parts[parts.length - 1];
+      } catch (e) {
+        // fallthrough
+      }
+    }
+
+    if (typeof roomCode !== "string" || !ROOM_CODE_REGEX.test(roomCode)) {
+      throw new AppError("Invalid roomCode format", 400);
+    }
+
+    // normalize into body for downstream handlers
+    req.body = req.body || {};
+    req.body.roomCode = roomCode;
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export { validateCreate, validateJoin };
 class RoomValidator {
   // Domain A will define room validators here.
 }
