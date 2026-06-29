@@ -7,7 +7,7 @@ class DocumentController {
 
   async getSnapshot(req, res, next) {
     try {
-      const snapshot = await this.documentService.getSnapshot(req.params.roomCode);
+      const snapshot = await this.documentService.getSnapshot(req.params.roomCode, req.user);
 
       return res.json({
         success: true,

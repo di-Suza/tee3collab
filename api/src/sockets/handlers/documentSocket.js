@@ -20,7 +20,10 @@ class DocumentSocketHandler {
       const normalizedRoomCode = this.normalizeRoomCode(roomCode);
       this.socket.join(normalizedRoomCode);
 
-      const snapshot = await this.documentService.getSnapshot(normalizedRoomCode);
+      const snapshot = await this.documentService.getSnapshot(
+        normalizedRoomCode,
+        this.socket.user,
+      );
       this.socket.emit(SOCKET_EVENTS.DOCUMENT_SNAPSHOT, snapshot);
 
       if (typeof acknowledge === "function") {
