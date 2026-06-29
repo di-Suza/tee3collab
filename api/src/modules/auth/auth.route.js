@@ -1,5 +1,6 @@
 import { Router } from "express";
 import AuthController from "./auth.controller.js";
+import AuthMiddleware from "../../shared/middleware/auth.js";
 import passport from "passport";
 
 class AuthRoute {
@@ -25,6 +26,12 @@ class AuthRoute {
         session: false,
       }),
       this.controller.GoogleCallback.bind(this.controller),
+    );
+
+    this.router.get(
+      "/me",
+      AuthMiddleware.handle,
+      this.controller.getMe.bind(this.controller),
     );
   }
 

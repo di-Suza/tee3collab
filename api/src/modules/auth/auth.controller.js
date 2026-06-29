@@ -38,6 +38,7 @@ class AuthController {
         sameSite: "strict",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
+      res.redirect(`${EnvConfig.get("FRONTEND_URL")}/auth/success`);
 
       return res.json({
         success: true,
@@ -48,6 +49,22 @@ class AuthController {
           googleAccessToken,
           googleRefreshToken,
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMe(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      return res.json({
+        success: true,
+        data: { user },
       });
     } catch (error) {
       next(error);
