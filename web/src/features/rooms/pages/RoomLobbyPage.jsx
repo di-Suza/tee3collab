@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import RoomService from "../services/room.service.js";
 import { setCurrentRoom, setLoading, setError } from "../roomsSlice.js";
 
 export function RoomLobbyPage() {
   const [joining, setJoining] = useState(false);
-  const [roomCode, setRoomCode] = useState("");
+  const [searchParams] = useSearchParams();
+  const [roomCode, setRoomCode] = useState(searchParams.get("joinRoomCode") || "");
   const [password, setPassword] = useState("");
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export function RoomLobbyPage() {
       dispatch(setCurrentRoom(res.data.room));
       navigate(`/app/rooms/${res.data.room.roomCode}`);
     } catch (err) {
-      dispatch(setError(err.message || "Failed to join room"));
+      dispatch(setError(err.response?.data?.message || err.message || "Failed to join room"));
     } finally {
       setJoining(false);
     }

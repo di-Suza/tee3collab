@@ -71,9 +71,26 @@ function validateJoin(req, _res, next) {
   }
 }
 
-export { validateCreate, validateJoin };
+function validateRoomCodeParam(req, _res, next) {
+  try {
+    const roomCode = String(req.params.roomCode || "").toUpperCase();
+
+    if (!ROOM_CODE_REGEX.test(roomCode)) {
+      throw new AppError("Invalid roomCode format", 400);
+    }
+
+    req.params.roomCode = roomCode;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export { validateCreate, validateJoin, validateRoomCodeParam };
 class RoomValidator {
-  // Domain A will define room validators here.
+  static validateCreate = validateCreate;
+  static validateJoin = validateJoin;
+  static validateRoomCodeParam = validateRoomCodeParam;
 }
 
 export { RoomValidator };

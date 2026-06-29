@@ -1,7 +1,7 @@
 import { Router } from "express";
 import RoomController from "./room.controller.js";
 import AuthMiddleware from "../../shared/middleware/auth.js";
-import { validateCreate, validateJoin } from "./room.validator.js";
+import { validateCreate, validateJoin, validateRoomCodeParam } from "./room.validator.js";
 
 class RoomRoute {
   constructor() {
@@ -24,6 +24,12 @@ class RoomRoute {
       AuthMiddleware.handle,
       validateJoin,
       this.controller.join.bind(this.controller),
+    );
+    this.router.patch(
+      "/:roomCode/close",
+      AuthMiddleware.handle,
+      validateRoomCodeParam,
+      this.controller.close.bind(this.controller),
     );
   }
 

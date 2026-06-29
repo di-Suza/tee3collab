@@ -16,6 +16,14 @@ class RoomRepository {
       { new: true },
     );
   }
+
+  async closeRoom(roomId) {
+    return await Room.findByIdAndUpdate(
+      roomId,
+      { status: "closed" },
+      { new: true },
+    );
+  }
 }
 
 export { RoomRepository };

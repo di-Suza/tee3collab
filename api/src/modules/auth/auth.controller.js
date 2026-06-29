@@ -1,6 +1,7 @@
 import { AuthService } from "./auth.service.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { EnvConfig } from "../../config/env.js";
+import { AuthCookieUtil } from "../../shared/utils/authCookie.js";
 
 class AuthController {
   constructor(authService) {
@@ -14,7 +15,7 @@ class AuthController {
         throw new AppError("Google authentication failed", 401);
       }
 
-      const { profile, googleAccessToken, googleRefreshToken } = userPayload;
+      const { profile } = userPayload;
       const email = profile?.emails?.[0]?.value;
       if (!email) {
         throw new AppError("Google profile email is required", 400);
@@ -26,30 +27,9 @@ class AuthController {
         displayName: profile?.displayName || profile?.displayName || "",
       });
 
-      res.cookie("accessToken", result.accessToken, {
-        httpOnly: true,
-        secure: EnvConfig.get("NODE_ENV") === "production",
-        sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-      res.cookie("refreshToken", result.refreshToken, {
-        httpOnly: true,
-        secure: EnvConfig.get("NODE_ENV") === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-      res.redirect(`${EnvConfig.get("FRONTEND_URL")}/auth/success`);
+      AuthCookieUtil.setAuthCookies(res, result);
 
-      return res.json({
-        success: true,
-        data: {
-          user: result.user,
-          appAccessToken: result.accessToken,
-          appRefreshToken: result.refreshToken,
-          googleAccessToken,
-          googleRefreshToken,
-        },
-      });
+      return res.redirect(`${EnvConfig.get("FRONTEND_URL")}/auth/success`);
     } catch (error) {
       next(error);
     }
@@ -78,18 +58,7 @@ class AuthController {
 
       const result = await this.authService.refreshTokens(refreshToken);
 
-      res.cookie("accessToken", result.accessToken, {
-        httpOnly: true,
-        secure: EnvConfig.get("NODE_ENV") === "production",
-        sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000,
-      });
-      res.cookie("refreshToken", result.refreshToken, {
-        httpOnly: true,
-        secure: EnvConfig.get("NODE_ENV") === "production",
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      AuthCookieUtil.setAuthCookies(res, result);
 
       return res.json({
         success: true,

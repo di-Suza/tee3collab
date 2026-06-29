@@ -1,6 +1,7 @@
 import { RoomRepository } from "./room.repository.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { EnvConfig } from "../../config/env.js";
+import { PasswordHashUtil } from "../../shared/utils/passwordHash.js";
 
 const ROOM_CODE_REGEX = /^[A-HJ-NP-Z2-9]{6}$/;
 
@@ -33,11 +34,13 @@ class RoomService {
       throw new AppError("Room code already exists", 409);
     }
 
+    const hashedPassword = await PasswordHashUtil.hash(password);
+
     const room = await this.roomRepository.createRoom({
       roomCode: upperRoomCode,
-      password,
+      password: hashedPassword,
       createdBy,
-      members,
+      members: [...new Set([createdBy, ...members])],
     });
 
     const joinLink = `${EnvConfig.get("FRONTEND_URL")}/join/${upperRoomCode}`;
@@ -45,7 +48,6 @@ class RoomService {
     return {
       room,
       roomCode: upperRoomCode,
-      password,
       joinLink,
     };
   }
@@ -66,13 +68,39 @@ class RoomService {
       throw new AppError("Room not found", 404);
     }
 
-    if (room.password !== password) {
+    if (room.status === "closed") {
+      throw new AppError("Room is closed", 403);
+    }
+
+    const isPasswordValid = await PasswordHashUtil.compare(password, room.password);
+
+    if (!isPasswordValid) {
       throw new AppError("Invalid room password", 401);
     }
 
     const updated = await this.roomRepository.addMember(room._id, userId);
 
     return updated;
+  }
+
+  async closeRoom({ roomCode, userId } = {}) {
+    if (!roomCode) {
+      throw new AppError("roomCode is required", 400);
+    }
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
+    }
+
+    const room = await this.roomRepository.findByCode(roomCode.toUpperCase());
+    if (!room) {
+      throw new AppError("Room not found", 404);
+    }
+
+    if (String(room.createdBy) !== String(userId)) {
+      throw new AppError("Only the room host can close this room", 403);
+    }
+
+    return this.roomRepository.closeRoom(room._id);
   }
 }
 
