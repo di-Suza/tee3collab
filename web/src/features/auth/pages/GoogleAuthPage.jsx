@@ -17,15 +17,31 @@ export function GoogleAuthPage() {
           dispatch(setLoading(true));
           const res = await AuthService.getMe();
           dispatch(setUser(res.data.user));
+          const pendingRoomCode = AuthService.getPendingJoinRoomCode();
+
+          if (pendingRoomCode) {
+            AuthService.clearPendingJoinRoomCode();
+            navigate(`/app?joinRoomCode=${pendingRoomCode}`, { replace: true });
+            return;
+          }
+
           navigate("/app", { replace: true });
         } catch (err) {
           dispatch(setError(err.message || "Failed to fetch user"));
         }
       })();
     } else if (user) {
+      const pendingRoomCode = AuthService.getPendingJoinRoomCode() || roomCode;
+
+      if (pendingRoomCode) {
+        AuthService.clearPendingJoinRoomCode();
+        navigate(`/app?joinRoomCode=${pendingRoomCode}`, { replace: true });
+        return;
+      }
+
       navigate("/app", { replace: true });
     }
-  }, [dispatch, navigate, user]);
+  }, [dispatch, navigate, roomCode, user]);
 
   return (
     <section className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6">
@@ -41,18 +57,19 @@ export function GoogleAuthPage() {
         <a
           className="inline-flex items-center justify-center rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20"
           href={AuthService.googleAuthUrl()}
+          onClick={() => AuthService.setPendingJoinRoomCode(roomCode)}
         >
           Continue with Google
         </a>
 
-      {user ? (
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-          onClick={() => navigate("/app")}
-        >
-          Go to dashboard
-         </button>
+        {user ? (
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            onClick={() => navigate("/app")}
+          >
+            Go to dashboard
+          </button>
         ) : null}
       </div>
     </section>

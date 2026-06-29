@@ -34,6 +34,12 @@ class AuthRoute {
       this.controller.getMe.bind(this.controller),
     );
 
+    this.router.patch(
+      "/me",
+      AuthMiddleware.handle,
+      this.controller.updateMe.bind(this.controller),
+    );
+
     this.router.post(
       "/refresh-token",
       this.controller.refreshToken.bind(this.controller),

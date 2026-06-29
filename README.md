@@ -1,6 +1,6 @@
 # CodeRoom
 
-CodeRoom is a real-time collaborative code editor for the Kodex Mini Hack-Sprint. This repo is an initial monorepo scaffold only.
+CodeRoom is a MERN + Socket.io collaborative code editor for the Kodex Mini Hack-Sprint. Users authenticate, create or join a room, and edit one shared document in near real time with MongoDB persistence.
 
 ## Monorepo Layout
 
@@ -15,26 +15,33 @@ CodeRoom is a real-time collaborative code editor for the Kodex Mini Hack-Sprint
 
 ## Stack
 
-- Frontend: React, Vite, Tailwind CSS, React Router, Axios, Socket.io client
+- Frontend: React, Vite, Tailwind CSS, React Router, Redux Toolkit, Axios, Monaco Editor, Socket.io client
 - Backend: Node.js, Express, MongoDB/Mongoose, Redis, Socket.io
-- Auth: Google auth only
-- Architecture: class-based backend with route, controller, service, repository, model, validator, DTO, and interface starter files
+- Auth: Google auth with HTTP-only auth cookies
+- Architecture: class-based route, controller, service, repository, model, validator, DTO, and interface layers
 
 ## Sprint Domains
 
-- Domain A: Auth and room management
-- Domain B: Document and sync engine
-- Domain C: Realtime and presence
-- Cross-cutting: MongoDB persistence
-
-Fill owners after team split:
-
 ```txt
-Domain A owner:
-Domain B owner:
-Domain C owner:
-MongoDB persistence owner:
+Domain A - Auth and Room Management: add owner name
+Domain B - Document and Sync Engine: Sujal
+Domain C - Realtime and Presence: add owner name
+MongoDB Persistence: add owner name
+Live deployed link: add link before submission
 ```
+
+## Implemented Flow
+
+- Google sign-in redirects authenticated users to the dashboard.
+- Dashboard supports create room, join room by code/password, invite-link join, room history, host close-room control, and profile editing.
+- Room creation generates a six-character shareable room code and stores a hashed room password.
+- The editor loads the saved document snapshot and sends position-based patches through Socket.io.
+- Document content, version, last editor, and patch history persist in MongoDB.
+- Document HTTP and socket sync are guarded by room membership.
+
+## Domain B Sync Strategy
+
+The client does not send the full document on every edit. Monaco changes are converted into a compact patch: `baseVersion`, `position`, `deleteCount`, and `insertText`. The server is authoritative and stores a monotonically increasing document version plus recent patch history. If a client sends a stale patch, the server shifts its position across accepted patches after that client's `baseVersion`, applies the transformed patch, and returns a visible conflict reason. This keeps concurrent inserts from overwriting each other without using banned CRDT/OT libraries like Yjs, ShareDB, or Automerge.
 
 ## Backend Structure
 
@@ -71,11 +78,28 @@ module/
 `-- module.interface.js
 ```
 
-## Current Scope
+## Key API Routes
 
-This scaffold intentionally does not implement Domain A, Domain B, or Domain C business flows. Module files contain starter classes and comments only, so each owner can build their own part cleanly.
+- `GET /api/v1/auth/me`
+- `PATCH /api/v1/auth/me`
+- `POST /api/v1/rooms/create`
+- `POST /api/v1/rooms/join`
+- `POST /api/v1/rooms/join-link`
+- `GET /api/v1/rooms/history`
+- `PATCH /api/v1/rooms/:roomCode/close`
+- `GET /api/v1/documents/:roomCode`
+- `PATCH /api/v1/documents/:roomCode/patch`
 
-Domain B should define the actual document sync strategy inside `api/src/modules/documents` and `api/src/shared/utils/patch.js`.
+## Socket Events
+
+- `document:join`
+- `document:snapshot`
+- `document:patch`
+- `document:patch:applied`
+- `document:sync:error`
+- `presence:typing:start`
+- `presence:typing:stop`
+- `document:typing`
 
 ## Setup
 
@@ -114,9 +138,18 @@ npm run dev:web
 - `npm run start` - start backend
 - `npm run lint` - lint frontend
 
+## Verification
+
+```bash
+npm --prefix web run build
+Get-ChildItem -Recurse -File api/src -Filter *.js | ForEach-Object { node --check $_.FullName }
+git diff --check
+```
+
 ## Rules Reminder
 
 - Do not use CRDT/OT libraries like Yjs, ShareDB, or Automerge.
-- Do not build syntax highlighting, autocomplete, linting, or code execution for the bar tier.
+- Do not send full-document payloads for per-keystroke sync.
+- Do not add code execution.
 - Deploy frontend, backend, sockets, and MongoDB persistence before submission.
 - Keep commit messages clear and tied to domain ownership.

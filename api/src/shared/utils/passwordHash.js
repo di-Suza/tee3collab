@@ -1,10 +1,16 @@
+import bcrypt from "bcryptjs";
+
 class PasswordHashUtil {
-  static hash() {
-    // Domain A will implement room password hashing here.
+  static async hash(value) {
+    return bcrypt.hash(value, 10);
   }
 
-  static compare() {
-    // Domain A will implement room password comparison here.
+  static async compare(value, hash) {
+    if (!value || !hash) {
+      return false;
+    }
+
+    return bcrypt.compare(value, hash);
   }
 }
 

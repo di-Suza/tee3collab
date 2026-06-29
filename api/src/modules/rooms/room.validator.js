@@ -6,13 +6,10 @@ function validateCreate(req, _res, next) {
   try {
     const { roomCode, password, members } = req.body || {};
 
-    if (!roomCode) {
-      throw new AppError("roomCode is required", 400);
-    }
     if (!password) {
       throw new AppError("password is required", 400);
     }
-    if (typeof roomCode !== "string" || !ROOM_CODE_REGEX.test(roomCode)) {
+    if (roomCode && (typeof roomCode !== "string" || !ROOM_CODE_REGEX.test(roomCode))) {
       throw new AppError("Invalid roomCode format", 400);
     }
     if (typeof password !== "string" || password.length < 4) {
@@ -28,6 +25,10 @@ function validateCreate(req, _res, next) {
           throw new AppError("each member must be a non-empty user id string", 400);
         }
       }
+    }
+
+    if (roomCode) {
+      req.body.roomCode = roomCode.toUpperCase();
     }
 
     return next();
@@ -57,13 +58,15 @@ function validateJoin(req, _res, next) {
       }
     }
 
-    if (typeof roomCode !== "string" || !ROOM_CODE_REGEX.test(roomCode)) {
+    const normalizedRoomCode = String(roomCode || "").toUpperCase();
+
+    if (!ROOM_CODE_REGEX.test(normalizedRoomCode)) {
       throw new AppError("Invalid roomCode format", 400);
     }
 
     // normalize into body for downstream handlers
     req.body = req.body || {};
-    req.body.roomCode = roomCode;
+    req.body.roomCode = normalizedRoomCode;
 
     return next();
   } catch (error) {
@@ -71,9 +74,59 @@ function validateJoin(req, _res, next) {
   }
 }
 
-export { validateCreate, validateJoin };
+function validateRoomCodeParam(req, _res, next) {
+  try {
+    const roomCode = String(req.params.roomCode || "").toUpperCase();
+
+    if (!ROOM_CODE_REGEX.test(roomCode)) {
+      throw new AppError("Invalid roomCode format", 400);
+    }
+
+    req.params.roomCode = roomCode;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function validateJoinInvite(req, _res, next) {
+  try {
+    let { roomCode, link } = req.body || {};
+
+    if (!roomCode && !link) {
+      throw new AppError("roomCode or link is required", 400);
+    }
+
+    if (!roomCode && link) {
+      try {
+        const parts = String(link).split("/").filter(Boolean);
+        roomCode = parts[parts.length - 1];
+      } catch (e) {
+        // fallthrough
+      }
+    }
+
+    const normalizedRoomCode = String(roomCode || "").toUpperCase();
+
+    if (!ROOM_CODE_REGEX.test(normalizedRoomCode)) {
+      throw new AppError("Invalid roomCode format", 400);
+    }
+
+    req.body = req.body || {};
+    req.body.roomCode = normalizedRoomCode;
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export { validateCreate, validateJoin, validateJoinInvite, validateRoomCodeParam };
 class RoomValidator {
-  // Domain A will define room validators here.
+  static validateCreate = validateCreate;
+  static validateJoin = validateJoin;
+  static validateJoinInvite = validateJoinInvite;
+  static validateRoomCodeParam = validateRoomCodeParam;
 }
 
 export { RoomValidator };

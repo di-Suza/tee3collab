@@ -14,6 +14,11 @@ const roomSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    status: {
+      type: String,
+      enum: ["open", "closed"],
+      default: "open",
+    },
 
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -32,5 +37,5 @@ const roomSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-const roomModel= mongoose.model("Room", roomSchema);
+const roomModel = mongoose.model("Room", roomSchema);
 export default roomModel;

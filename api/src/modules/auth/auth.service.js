@@ -82,6 +82,61 @@ class AuthService {
       refreshToken: newRefreshToken,
     };
   }
+
+  async updateProfile(userId, profileData = {}) {
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
+    }
+
+    const updates = {};
+
+    if (profileData.name !== undefined) {
+      const name = String(profileData.name || "").trim();
+
+      if (!name) {
+        throw new AppError("Name is required", 400);
+      }
+
+      updates.name = name;
+    }
+
+    if (profileData.picture !== undefined) {
+      const picture = String(profileData.picture || "").trim();
+
+      if (picture && !/^https?:\/\/.+/i.test(picture)) {
+        throw new AppError("Picture must be a valid URL", 400);
+      }
+
+      if (picture) {
+        updates.picture = picture;
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      throw new AppError("No profile fields provided", 400);
+    }
+
+    const updatedUser = await this.authRepository.updateProfile(userId, updates);
+    if (!updatedUser) {
+      throw new AppError("User not found", 404);
+    }
+
+    const payload = {
+      id: updatedUser._id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      picture: updatedUser.picture,
+    };
+
+    const accessToken = jwt.sign(payload, EnvConfig.get("JWT_ACCESS_SECRET"), {
+      expiresIn: EnvConfig.get("JWT_ACCESS_EXPIRES_IN"),
+    });
+
+    return {
+      user: updatedUser,
+      accessToken,
+    };
+  }
 }
 
 export { AuthService };

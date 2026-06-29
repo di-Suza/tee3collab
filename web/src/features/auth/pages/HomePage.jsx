@@ -1,11 +1,11 @@
-import React from "react";
+import AuthService from "../services/auth.service.js";
 
 
 const HomePage = () => {
 
-    const handleGoogleSignIn = () => {
-        window.location.href = "http://localhost:5000/api/v1/auth/google";
-    }
+  const handleGoogleSignIn = () => {
+    window.location.href = AuthService.googleAuthUrl();
+  };
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
       <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-xl p-8">
@@ -28,6 +28,7 @@ const HomePage = () => {
 
         {/* Google Button */}
         <a
+          href={AuthService.googleAuthUrl()}
           onClick={handleGoogleSignIn}
           className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg border border-slate-700 bg-white px-4 py-3 font-medium text-slate-900 transition hover:bg-slate-100"
         >
@@ -55,7 +56,6 @@ const HomePage = () => {
           </svg>
 
           Continue with Google
-          
         </a>
 
         {/* Footer */}
