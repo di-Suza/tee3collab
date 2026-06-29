@@ -4,7 +4,21 @@ const ROOM_CODE_REGEX = /^[A-HJ-NP-Z2-9]{6}$/;
 
 function validateCreate(req, _res, next) {
   try {
-    const members = req.body?.members;
+    const { roomCode, password, members } = req.body || {};
+
+    if (!roomCode) {
+      throw new AppError("roomCode is required", 400);
+    }
+    if (!password) {
+      throw new AppError("password is required", 400);
+    }
+    if (typeof roomCode !== "string" || !ROOM_CODE_REGEX.test(roomCode)) {
+      throw new AppError("Invalid roomCode format", 400);
+    }
+    if (typeof password !== "string" || password.length < 4) {
+      throw new AppError("Password must be at least 4 characters", 400);
+    }
+
     if (members !== undefined) {
       if (!Array.isArray(members)) {
         throw new AppError("members must be an array", 400);

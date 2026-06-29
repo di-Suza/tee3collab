@@ -4,14 +4,16 @@ import { PublicLayout } from "../layouts/PublicLayout.jsx";
 import { GoogleAuthPage } from "../../features/auth/pages/GoogleAuthPage.jsx";
 import { EditorRoomPage } from "../../features/editor/pages/EditorRoomPage.jsx";
 import { RoomLobbyPage } from "../../features/rooms/pages/RoomLobbyPage.jsx";
+import HomePage from "../../features/auth/pages/HomePage.jsx";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <PublicLayout />,
     children: [
-      { index: true, element: <Navigate to="/auth" replace /> },
+      { index: true, element: <HomePage/> },
       { path: "auth", element: <GoogleAuthPage /> },
+      { path: "auth/success", element: <GoogleAuthPage /> },
       { path: "join/:roomCode", element: <GoogleAuthPage /> },
     ],
   },
@@ -25,6 +27,6 @@ export const router = createBrowserRouter([
   },
   {
     path: "*",
-    element: <Navigate to="/auth" replace />,
+    element: <Navigate to="/" replace />,
   },
 ]);

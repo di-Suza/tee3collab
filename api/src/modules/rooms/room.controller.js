@@ -13,8 +13,13 @@ class RoomController {
         throw new AppError("Unauthorized", 401);
       }
 
-      const members = req.body?.members || [];
-      const result = await this.roomService.createRoom({ createdBy: user.id, members });
+      const { roomCode, password, members = [] } = req.body || {};
+      const result = await this.roomService.createRoom({
+        createdBy: user.id,
+        roomCode,
+        password,
+        members,
+      });
 
       return res.status(201).json({
         success: true,

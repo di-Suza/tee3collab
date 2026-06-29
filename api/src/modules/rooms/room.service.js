@@ -1,47 +1,50 @@
-import crypto from "crypto";
 import { RoomRepository } from "./room.repository.js";
-import { RoomCodeUtil } from "../../shared/utils/roomCode.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { EnvConfig } from "../../config/env.js";
+
+const ROOM_CODE_REGEX = /^[A-HJ-NP-Z2-9]{6}$/;
 
 class RoomService {
   constructor(roomRepository) {
     this.roomRepository = roomRepository || new RoomRepository();
   }
 
-  async createRoom({ createdBy, members = [] } = {}) {
+  async createRoom({ createdBy, roomCode, password, members = [] } = {}) {
     if (!createdBy) {
       throw new AppError("createdBy is required", 400);
     }
-
-    // Generate unique room code
-    let roomCode = RoomCodeUtil.generate();
-    let exists = await this.roomRepository.findByCode(roomCode);
-    let attempts = 0;
-    while (exists && attempts < 5) {
-      roomCode = RoomCodeUtil.generate();
-      exists = await this.roomRepository.findByCode(roomCode);
-      attempts += 1;
+    if (!roomCode) {
+      throw new AppError("roomCode is required", 400);
     }
-    if (exists) {
-      throw new AppError("Failed to generate unique room code", 500);
+    if (!password) {
+      throw new AppError("password is required", 400);
     }
 
-    // Simple password generation
-    const password = crypto.randomBytes(4).toString("hex");
+    if (!ROOM_CODE_REGEX.test(roomCode)) {
+      throw new AppError("Invalid roomCode format", 400);
+    }
+    if (typeof password !== "string" || password.length < 4) {
+      throw new AppError("Password must be at least 4 characters", 400);
+    }
+
+    const upperRoomCode = roomCode.toUpperCase();
+    const existing = await this.roomRepository.findByCode(upperRoomCode);
+    if (existing) {
+      throw new AppError("Room code already exists", 409);
+    }
 
     const room = await this.roomRepository.createRoom({
-      roomCode,
+      roomCode: upperRoomCode,
       password,
       createdBy,
       members,
     });
 
-    const joinLink = `${EnvConfig.get("FRONTEND_URL")}/rooms/join/${roomCode}`;
+    const joinLink = `${EnvConfig.get("FRONTEND_URL")}/join/${upperRoomCode}`;
 
     return {
       room,
-      roomCode,
+      roomCode: upperRoomCode,
       password,
       joinLink,
     };
