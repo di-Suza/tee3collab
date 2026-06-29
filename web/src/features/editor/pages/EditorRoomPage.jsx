@@ -221,7 +221,7 @@ export function EditorRoomPage() {
           <div className="h-[calc(100vh-132px)] min-h-[520px]">
             <Editor
               height="100%"
-              language="javascript"
+              language="plaintext"
               loading="Loading editor..."
               onChange={handleEditorChange}
               options={{
