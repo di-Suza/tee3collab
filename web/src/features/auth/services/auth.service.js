@@ -1,16 +1,23 @@
-import axios from "axios";
 import { env } from "../../../shared/utils/env.js";
-
-const API = axios.create({
-  baseURL: "/api/v1",
-  withCredentials: true,
-});
+import { httpClient } from "../../../shared/api/http-client.js";
+import { tokenStorage } from "../../../shared/utils/token-storage.js";
 
 const PENDING_JOIN_ROOM_KEY = "coderoom.pendingJoinRoomCode";
 
 export class AuthService {
   static async getMe() {
-    const res = await API.get("/auth/me");
+    const res = await httpClient.get("/auth/me");
+    return res.data;
+  }
+
+  static async updateMe(profile) {
+    const res = await httpClient.patch("/auth/me", profile);
+    const accessToken = res.data?.data?.accessToken;
+
+    if (accessToken) {
+      tokenStorage.set(accessToken);
+    }
+
     return res.data;
   }
 
