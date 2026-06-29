@@ -1,4 +1,14 @@
 class DocumentDTO {
+  static patchPayload(patch) {
+    return {
+      clientId: patch.clientId,
+      baseVersion: patch.baseVersion,
+      position: patch.position,
+      deleteCount: patch.deleteCount,
+      insertText: patch.insertText,
+    };
+  }
+
   static snapshot(document) {
     return {
       roomCode: document.roomCode,
