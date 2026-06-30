@@ -10,7 +10,39 @@ import {
   createClientId,
   createPatchFromChange,
 } from "../utils/text-patch.js";
-import { ArrowLeft, Copy, Zap, Shield, Globe } from "lucide-react";
+import { Activity, ArrowLeft, ChevronDown, Copy, Globe, Shield, Users, Zap } from "lucide-react";
+
+const LANGUAGE_OPTIONS = [
+  { label: "JavaScript", value: "javascript" },
+  { label: "TypeScript", value: "typescript" },
+  { label: "HTML", value: "html" },
+  { label: "CSS", value: "css" },
+  { label: "JSON", value: "json" },
+  { label: "Python", value: "python" },
+  { label: "Plain Text", value: "plaintext" },
+];
+
+const USER_COLOR_CLASSES = [
+  "coderoom-user-0",
+  "coderoom-user-1",
+  "coderoom-user-2",
+  "coderoom-user-3",
+  "coderoom-user-4",
+];
+
+function lineFromOffset(content = "", offset = 0) {
+  return content.slice(0, Math.max(0, offset)).split("\n").length;
+}
+
+function hashColorIndex(value = "") {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) % USER_COLOR_CLASSES.length;
+  }
+
+  return hash;
+}
 
 export function EditorRoomPage() {
   const { roomCode } = useParams();
@@ -30,32 +62,157 @@ export function EditorRoomPage() {
   const [lastActor, setLastActor] = useState(null);
   const [conflict, setConflict] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(Boolean(createdRoomInvite));
+  const [activePanel, setActivePanel] = useState("identity");
+  const [language, setLanguage] = useState("javascript");
 
   const socketRef = useRef(null);
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
   const clientIdRef = useRef("");
   const contentRef = useRef("");
   const versionRef = useRef(0);
   const applyingRemoteRef = useRef(false);
   const typingTimerRef = useRef(null);
   const remoteTypingTimerRef = useRef(null);
+  const decorationIdsRef = useRef([]);
+  const lineAuthorsRef = useRef(new Map());
+  const typingIndicatorsRef = useRef(new Map());
+  const conflictMarkersRef = useRef([]);
 
-  // --- LOGIC (KEPT EXACTLY THE SAME) ---
+  const refreshEditorDecorations = useCallback(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+
+    if (!editor || !monaco) {
+      return;
+    }
+
+    const decorations = [];
+    const model = editor.getModel();
+    const lineCount = model?.getLineCount() || 1;
+
+    for (const [lineNumber, actor] of lineAuthorsRef.current.entries()) {
+      const safeLine = Math.min(Math.max(Number(lineNumber), 1), lineCount);
+      const colorIndex = hashColorIndex(actor?.id || actor?.name || "");
+
+      decorations.push({
+        range: new monaco.Range(safeLine, 1, safeLine, 1),
+        options: {
+          isWholeLine: true,
+          className: `coderoom-line-author ${USER_COLOR_CLASSES[colorIndex]}`,
+        },
+      });
+    }
+
+    for (const indicator of typingIndicatorsRef.current.values()) {
+      const safeLine = Math.min(Math.max(Number(indicator.lineNumber || 1), 1), lineCount);
+      const colorIndex = hashColorIndex(indicator.actor?.id || indicator.actor?.name || "");
+
+      decorations.push({
+        range: new monaco.Range(safeLine, 1, safeLine, 1),
+        options: {
+          isWholeLine: true,
+          className: `coderoom-typing-line ${USER_COLOR_CLASSES[colorIndex]}`,
+          after: {
+            content: ` ${indicator.actor?.name || "Someone"} is typing`,
+            inlineClassName: `coderoom-typing-label coderoom-user-text-${colorIndex}`,
+          },
+        },
+      });
+    }
+
+    for (const marker of conflictMarkersRef.current) {
+      const safeLine = Math.min(Math.max(Number(marker.lineNumber || 1), 1), lineCount);
+
+      decorations.push({
+        range: new monaco.Range(safeLine, 1, safeLine, 1),
+        options: {
+          glyphMarginClassName: "coderoom-conflict-glyph",
+          glyphMarginHoverMessage: { value: marker.message },
+          hoverMessage: { value: marker.message },
+        },
+      });
+    }
+
+    decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations);
+  }, []);
+
+  const applyPatchToEditor = useCallback((patch) => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    const model = editor?.getModel();
+
+    if (!editor || !monaco || !model) {
+      contentRef.current = applyPatchToText(contentRef.current, patch);
+      return;
+    }
+
+    const safePosition = Math.min(Math.max(patch.position, 0), model.getValueLength());
+    const deleteEnd = Math.min(safePosition + patch.deleteCount, model.getValueLength());
+    const start = model.getPositionAt(safePosition);
+    const end = model.getPositionAt(deleteEnd);
+
+    editor.executeEdits("remote-sync", [
+      {
+        range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+        text: patch.insertText,
+        forceMoveMarkers: true,
+      },
+    ]);
+
+    contentRef.current = model.getValue();
+  }, []);
+
+  const applySnapshotToEditor = useCallback((snapshotContent) => {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+
+    if (!editor || !model || model.getValue() === snapshotContent) {
+      return;
+    }
+
+    editor.setValue(snapshotContent);
+  }, []);
+
+  const handleEditorMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    if (contentRef.current) {
+      editor.setValue(contentRef.current);
+    }
+
+    monaco.editor.setModelLanguage(editor.getModel(), language);
+    refreshEditorDecorations();
+  }, [language, refreshEditorDecorations]);
+
   const applySnapshot = useCallback((snapshot) => {
     applyingRemoteRef.current = true;
     contentRef.current = snapshot.content || "";
     versionRef.current = snapshot.version || 0;
     setContent(snapshot.content || "");
     setVersion(snapshot.version || 0);
+    applySnapshotToEditor(snapshot.content || "");
     setLoading(false);
     window.setTimeout(() => {
       applyingRemoteRef.current = false;
     }, 0);
-  }, []);
+  }, [applySnapshotToEditor]);
 
   const reloadSnapshot = useCallback(async () => {
     const snapshot = await DocumentService.getDocument(displayCode);
     applySnapshot(snapshot);
   }, [applySnapshot, displayCode]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    const model = editor?.getModel();
+
+    if (editor && monaco && model) {
+      monaco.editor.setModelLanguage(model, language);
+    }
+  }, [language]);
 
   useEffect(() => {
     clientIdRef.current = createClientId();
@@ -83,20 +240,36 @@ export function EditorRoomPage() {
       if (!mounted) return;
       const patch = payload.patch;
       const isOwnPatch = patch.clientId === clientIdRef.current;
+      const actor = payload.actor || { name: "Someone" };
+      const editedLine = lineFromOffset(contentRef.current, patch.position);
+
       versionRef.current = payload.version;
       setVersion(payload.version);
-      setLastActor(payload.actor?.name || "Someone");
+      setLastActor(actor.name || "Someone");
       setConflict(payload.conflict || null);
+      lineAuthorsRef.current.set(editedLine, actor);
+
+      if (payload.conflict) {
+        conflictMarkersRef.current = [
+          ...conflictMarkersRef.current.slice(-7),
+          {
+            lineNumber: editedLine,
+            message: `Conflict resolved near this line. ${payload.conflict.reason}`,
+          },
+        ];
+      }
 
       if (isOwnPatch) {
-        if (payload.conflict) await reloadSnapshot();
+        refreshEditorDecorations();
+        if (payload.conflict) {
+          await reloadSnapshot();
+        }
         return;
       }
 
       applyingRemoteRef.current = true;
-      const nextContent = applyPatchToText(contentRef.current, patch);
-      contentRef.current = nextContent;
-      setContent(nextContent);
+      applyPatchToEditor(patch);
+      refreshEditorDecorations();
       window.setTimeout(() => {
         applyingRemoteRef.current = false;
       }, 0);
@@ -105,10 +278,23 @@ export function EditorRoomPage() {
     socketService.onTyping((payload) => {
       if (!mounted) return;
       if (payload.isTyping) {
-        setTypingUser(payload.actor?.name || "Someone");
+        const actor = payload.actor || { name: "Someone" };
+        setTypingUser(actor.name || "Someone");
+        typingIndicatorsRef.current.set(actor.id || actor.name || "remote", {
+          actor,
+          lineNumber: payload.lineNumber || 1,
+        });
+        refreshEditorDecorations();
         window.clearTimeout(remoteTypingTimerRef.current);
-        remoteTypingTimerRef.current = window.setTimeout(() => setTypingUser(null), 1800);
+        remoteTypingTimerRef.current = window.setTimeout(() => {
+          typingIndicatorsRef.current.delete(actor.id || actor.name || "remote");
+          refreshEditorDecorations();
+          setTypingUser(null);
+        }, 1800);
       } else {
+        const actor = payload.actor || { name: "Someone" };
+        typingIndicatorsRef.current.delete(actor.id || actor.name || "remote");
+        refreshEditorDecorations();
         setTypingUser(null);
       }
     });
@@ -124,7 +310,7 @@ export function EditorRoomPage() {
       window.clearTimeout(remoteTypingTimerRef.current);
       socketService.disconnect();
     };
-  }, [applySnapshot, displayCode, reloadSnapshot]);
+  }, [applyPatchToEditor, applySnapshot, displayCode, refreshEditorDecorations, reloadSnapshot]);
 
   const handleEditorChange = useCallback(
     (nextValue = "") => {
@@ -133,10 +319,10 @@ export function EditorRoomPage() {
       const nextContent = nextValue || "";
       const patch = createPatchFromChange(previousContent, nextContent, versionRef.current, clientIdRef.current);
       contentRef.current = nextContent;
-      setContent(nextContent);
       if (!patch) return;
       setError("");
-      socketRef.current?.startTyping(displayCode);
+      const cursorLine = editorRef.current?.getPosition()?.lineNumber || lineFromOffset(nextContent, patch.position);
+      socketRef.current?.startTyping(displayCode, { lineNumber: cursorLine });
       socketRef.current?.sendPatch(displayCode, patch, (ack) => {
         if (!ack?.ok) setError(ack?.error?.message || "Patch was rejected by the server");
       });
@@ -168,6 +354,33 @@ export function EditorRoomPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [createdRoomInvite, showInviteModal]);
+
+  const inviteLink = createdRoomInvite?.joinLink || `${window.location.origin}/join/${displayCode}`;
+  const invitePassword = createdRoomInvite?.password || "Visible only after creation";
+
+  const renderAccordionPanel = (id, label, Icon, children) => {
+    const isOpen = activePanel === id;
+
+    return (
+      <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/40 backdrop-blur-md transition-all hover:border-zinc-600">
+        <button
+          className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+          onClick={() => setActivePanel(isOpen ? "" : id)}
+          type="button"
+        >
+          <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
+            <Icon size={14} />
+            {label}
+          </span>
+          <ChevronDown
+            className={`text-zinc-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            size={16}
+          />
+        </button>
+        {isOpen ? <div className="border-t border-zinc-800 p-5">{children}</div> : null}
+      </div>
+    );
+  };
 
   return (
     <div 
@@ -273,6 +486,20 @@ export function EditorRoomPage() {
           </div>
 
           <div className="flex items-center gap-6">
+            <label className="hidden items-center gap-2 text-xs text-zinc-500 md:flex">
+              Language
+              <select
+                className="rounded-lg border border-zinc-800 bg-black px-3 py-1.5 text-xs font-semibold text-zinc-200 outline-none transition-colors focus:border-zinc-500"
+                onChange={(event) => setLanguage(event.target.value)}
+                value={language}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="hidden md:flex items-center gap-4 text-xs font-mono">
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"}`} />
@@ -329,11 +556,14 @@ export function EditorRoomPage() {
               <div className="min-h-0 flex-1">
                 <Editor
                   height="100%"
-                  language="javascript"
+                  defaultValue={content}
+                  language={language}
                   loading="<div className='h-full w-full flex items-center justify-center text-zinc-500 font-mono'>Loading IDE...</div>"
                   onChange={handleEditorChange}
+                  onMount={handleEditorMount}
                   options={{
                     fontSize: 14,
+                    glyphMargin: true,
                     minimap: { enabled: false },
                     quickSuggestions: true,
                     wordBasedSuggestions: "off",
@@ -343,73 +573,111 @@ export function EditorRoomPage() {
                     padding: { top: 20 },
                   }}
                   theme="vs-dark"
-                  value={content}
                 />
               </div>
             </div>
           </div>
 
           {/* RIGHT: INFORMATION PANEL */}
-          <aside className="min-h-0 space-y-6 overflow-y-auto pr-1">
-            
-            {/* Room Identity Card */}
-            <div className="bg-zinc-900/40 border border-zinc-800 p-6 rounded-3xl backdrop-blur-md hover:border-zinc-600 transition-all">
-              <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">
-                <Globe size={14} /> Room Identity
-              </div>
+          <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
+            {renderAccordionPanel("identity", "Room Identity", Globe, (
               <div className="space-y-4">
                 <div>
-                  <p className="text-[10px] text-zinc-600 mb-1">Sesssion ID</p>
-                  <div className="flex items-center justify-between bg-black p-3 rounded-xl border border-zinc-800">
+                  <p className="mb-1 text-[10px] text-zinc-600">Room Code</p>
+                  <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-black p-3">
                     <span className="font-mono text-sm">{displayCode}</span>
-                    <button onClick={() => navigator.clipboard.writeText(displayCode)} className="text-zinc-500 hover:text-white transition-colors">
+                    <button
+                      className="text-zinc-500 transition-colors hover:text-white"
+                      onClick={() => copyToClipboard(displayCode)}
+                      type="button"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[10px] text-zinc-600">Password</p>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black p-3">
+                    <span className="min-w-0 truncate font-mono text-xs text-zinc-300">
+                      {invitePassword}
+                    </span>
+                    {createdRoomInvite?.password ? (
+                      <button
+                        className="shrink-0 text-zinc-500 transition-colors hover:text-white"
+                        onClick={() => copyToClipboard(createdRoomInvite.password)}
+                        type="button"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[10px] text-zinc-600">Quick Invite Link</p>
+                  <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black p-3">
+                    <span className="min-w-0 flex-1 break-all font-mono text-xs text-zinc-300">
+                      {inviteLink}
+                    </span>
+                    <button
+                      className="shrink-0 text-zinc-500 transition-colors hover:text-white"
+                      onClick={() => copyToClipboard(inviteLink)}
+                      type="button"
+                    >
                       <Copy size={14} />
                     </button>
                   </div>
                 </div>
               </div>
-            </div>
+            ))}
 
-            {/* Technical Specs Card */}
-            <div className="bg-zinc-900/40 border border-zinc-800 p-6 rounded-3xl backdrop-blur-md hover:border-zinc-600 transition-all">
-              <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">
-                <Shield size={14} /> Sync Architecture
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[10px] text-zinc-600 mb-1">Protocol</p>
-                  <p className="text-sm text-zinc-300 leading-relaxed">
-                    Server-authoritative deltas with versioned position shifting.
+            {renderAccordionPanel("presence", "Presence", Users, (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-zinc-800 bg-black/50 p-3">
+                  <p className="text-xs text-zinc-400">Live participant list will be wired by Domain C.</p>
+                  <p className="mt-2 text-[10px] uppercase tracking-widest text-zinc-600">
+                    Socket room is scoped to {displayCode}
                   </p>
                 </div>
-                <div className="h-px bg-zinc-800"></div>
-                <div>
-                  <p className="text-[10px] text-zinc-600 mb-1">Conflict Resolution</p>
-                  <p className="text-sm text-zinc-300 leading-relaxed">
-                    Stale patches are transformed against accepted history before commit.
-                  </p>
-                </div>
+                {typingUser ? (
+                  <div className="rounded-2xl border border-sky-900/60 bg-sky-950/30 p-3 text-xs text-sky-300">
+                    {typingUser} is typing right now.
+                  </div>
+                ) : null}
               </div>
-            </div>
+            ))}
 
-            {/* User Activity Card */}
-            <div className="bg-zinc-900/40 border border-zinc-800 p-6 rounded-3xl backdrop-blur-md hover:border-zinc-600 transition-all">
-              <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest mb-4">
-                <Zap size={14} /> Last Activity
-                
-              </div>
-              {lastActor ? (
-                <div className="flex items-center gap-3 p-3 bg-black/50 rounded-2xl border border-zinc-800">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs font-bold">
+            {renderAccordionPanel("activity", "Last Activity", Activity, (
+              lastActor ? (
+                <div className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-black/50 p-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-bold text-emerald-400">
                     {lastActor[0].toUpperCase()}
                   </div>
                   <span className="text-sm font-medium">{lastActor}</span>
                 </div>
               ) : (
-                <p className="text-xs text-zinc-600 italic">No activity recorded yet.</p>
-              )}
-            </div>
+                <p className="text-xs italic text-zinc-600">No activity recorded yet.</p>
+              )
+            ))}
 
+            {renderAccordionPanel("sync", "Sync Architecture", Shield, (
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-1 text-[10px] text-zinc-600">Protocol</p>
+                  <p className="text-sm leading-relaxed text-zinc-300">
+                    Server-authoritative deltas with versioned position shifting.
+                  </p>
+                </div>
+                <div className="h-px bg-zinc-800"></div>
+                <div>
+                  <p className="mb-1 text-[10px] text-zinc-600">Conflict Resolution</p>
+                  <p className="text-sm leading-relaxed text-zinc-300">
+                    Stale patches are transformed against accepted history before commit.
+                  </p>
+                </div>
+              </div>
+            ))}
           </aside>
         </main>
       </div>

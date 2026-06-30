@@ -13,8 +13,8 @@ export class EditorSocketService {
     this.socket.emit("document:patch", { roomCode, patch }, acknowledge);
   }
 
-  startTyping(roomCode) {
-    this.socket.emit("presence:typing:start", { roomCode });
+  startTyping(roomCode, meta = {}) {
+    this.socket.emit("presence:typing:start", { roomCode, ...meta });
   }
 
   stopTyping(roomCode) {
