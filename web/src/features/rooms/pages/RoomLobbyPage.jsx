@@ -2,17 +2,17 @@ import {
   ArrowRight,
   DoorOpen,
   History,
+  LogOut,
   Plus,
   RefreshCw,
   Save,
   UserRound,
-  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AuthService from "../../auth/services/auth.service.js";
-import { setUser } from "../../auth/authSlice.js";
+import { clearUser, setUser } from "../../auth/authSlice.js";
 import RoomService from "../services/room.service.js";
 import { setCurrentRoom, setRoomHistory, setLoading, setError } from "../roomsSlice.js";
 
@@ -39,7 +39,6 @@ export function RoomLobbyPage() {
   const [profileEditing, setProfileEditing] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
   const [profileName, setProfileName] = useState(user?.name || "");
-  const [profilePicture, setProfilePicture] = useState(user?.picture || "");
   const inviteHandledRef = useRef("");
 
   // --- LOGIC (KEPT EXACTLY THE SAME) ---
@@ -56,7 +55,6 @@ export function RoomLobbyPage() {
   useEffect(() => { loadHistory(); }, [loadHistory]);
   useEffect(() => {
     setProfileName(user?.name || "");
-    setProfilePicture(user?.picture || "");
   }, [user]);
 
   useEffect(() => {
@@ -84,26 +82,22 @@ export function RoomLobbyPage() {
     navigate(`/app/rooms/${room.roomCode}`);
   };
 
-  const handleCloseRoom = async (roomCode) => {
-    try {
-      dispatch(setLoading(true));
-      await RoomService.closeRoom(roomCode);
-      await loadHistory();
-    } catch (err) {
-      dispatch(setError(err.response?.data?.message || err.message || "Failed to close room"));
-    }
-  };
-
   const handleProfileSave = async () => {
     try {
       setSavingProfile(true);
-      const result = await AuthService.updateMe({ name: profileName, picture: profilePicture });
+      const result = await AuthService.updateMe({ name: profileName });
       dispatch(setUser(result.data.user));
       setProfileEditing(false);
       setLocalMessage("Profile saved");
     } catch (err) {
       dispatch(setError(err.response?.data?.message || err.message || "Failed to save profile"));
     } finally { setSavingProfile(false); }
+  };
+
+  const handleLogout = async () => {
+    await AuthService.logout();
+    dispatch(clearUser());
+    navigate("/", { replace: true });
   };
 
   // Modernized Room List Renderer
@@ -124,8 +118,11 @@ export function RoomLobbyPage() {
               <div className="flex items-center justify-between">
                 <div className="cursor-pointer" onClick={() => handleOpenRoom(room)}>
                   <span className="block font-mono text-sm font-bold text-zinc-100 group-hover:text-white transition-colors">{room.roomCode}</span>
-                  <span className="mt-1 block text-[10px] text-zinc-500">
+                  <span className="hidden">
                     {room.status} • {room.memberCount} users • {formatDate(room.updatedAt)}
+                  </span>
+                  <span className="mt-1 block text-[10px] text-zinc-500">
+                    {room.status === "open" ? "Active" : "Inactive"} - {room.memberCount} users - {formatDate(room.updatedAt)}
                   </span>
                 </div>
                 <button
@@ -135,14 +132,6 @@ export function RoomLobbyPage() {
                   <ArrowRight size={14} />
                 </button>
               </div>
-              {room.isHost && room.status === "open" && (
-                <button
-                  onClick={() => handleCloseRoom(room.roomCode)}
-                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-red-900/50 py-1 text-[10px] text-red-400 hover:bg-red-950 transition-all"
-                >
-                  <XCircle size={12} /> Close Session
-                </button>
-              )}
             </div>
           ))
         )}
@@ -234,8 +223,8 @@ export function RoomLobbyPage() {
           <aside className="space-y-6">
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-6 backdrop-blur-md hover:border-zinc-600 transition-all">
               <div className="flex items-center gap-4 mb-6">
-                {profilePicture ? (
-                  <img alt="User" className="h-14 w-14 rounded-2xl object-cover ring-2 ring-zinc-800" src={profilePicture} />
+                {user?.picture ? (
+                  <img alt="User" className="h-14 w-14 rounded-2xl object-cover ring-2 ring-zinc-800" src={user.picture} />
                 ) : (
                   <div className="h-14 w-14 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-400">
                     <UserRound size={24} />
@@ -254,11 +243,6 @@ export function RoomLobbyPage() {
                     onChange={(e) => setProfileName(e.target.value)}
                     value={profileName}
                   />
-                  <input
-                    className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-white"
-                    onChange={(e) => setProfilePicture(e.target.value)}
-                    value={profilePicture}
-                  />
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={handleProfileSave} disabled={savingProfile} className="bg-white text-black py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
                       <Save size={14} /> Save
@@ -267,9 +251,14 @@ export function RoomLobbyPage() {
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setProfileEditing(true)} className="w-full py-2 rounded-xl border border-zinc-800 text-xs text-zinc-400 hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
-                  <UserRound size={14} /> Edit Profile
-                </button>
+                <div className="space-y-2">
+                  <button onClick={() => setProfileEditing(true)} className="w-full py-2 rounded-xl border border-zinc-800 text-xs text-zinc-400 hover:bg-zinc-800 transition-all flex items-center justify-center gap-2">
+                    <UserRound size={14} /> Edit Profile
+                  </button>
+                  <button onClick={handleLogout} className="w-full py-2 rounded-xl border border-red-900/50 text-xs text-red-300 hover:bg-red-950 transition-all flex items-center justify-center gap-2">
+                    <LogOut size={14} /> Logout
+                  </button>
+                </div>
               )}
             </div>
           </aside>

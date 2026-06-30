@@ -98,6 +98,25 @@ class AuthController {
       next(error);
     }
   }
+
+  async logout(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      await this.authService.logout(user.id);
+      AuthCookieUtil.clearAuthCookies(res);
+
+      return res.json({
+        success: true,
+        data: { loggedOut: true },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export { AuthController };

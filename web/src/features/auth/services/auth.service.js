@@ -21,6 +21,14 @@ export class AuthService {
     return res.data;
   }
 
+  static async logout() {
+    try {
+      await httpClient.post("/auth/logout");
+    } finally {
+      tokenStorage.clear();
+    }
+  }
+
   static googleAuthUrl() {
     return `${env.apiUrl}/auth/google`;
   }
