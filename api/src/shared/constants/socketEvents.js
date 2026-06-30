@@ -2,6 +2,7 @@ const SOCKET_EVENTS = Object.freeze({
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
   ROOM_PARTICIPANTS: "room:participants",
+  ROOM_SYNC_ERROR: "room:sync:error",
   PRESENCE_TYPING_START: "presence:typing:start",
   PRESENCE_TYPING_STOP: "presence:typing:stop",
   DOCUMENT_JOIN: "document:join",
