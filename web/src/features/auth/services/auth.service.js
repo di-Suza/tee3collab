@@ -1,6 +1,5 @@
 import { env } from "../../../shared/utils/env.js";
 import { httpClient } from "../../../shared/api/http-client.js";
-import { tokenStorage } from "../../../shared/utils/token-storage.js";
 
 const PENDING_JOIN_ROOM_KEY = "coderoom.pendingJoinRoomCode";
 
@@ -12,21 +11,11 @@ export class AuthService {
 
   static async updateMe(profile) {
     const res = await httpClient.patch("/auth/me", profile);
-    const accessToken = res.data?.data?.accessToken;
-
-    if (accessToken) {
-      tokenStorage.set(accessToken);
-    }
-
     return res.data;
   }
 
   static async logout() {
-    try {
-      await httpClient.post("/auth/logout");
-    } finally {
-      tokenStorage.clear();
-    }
+    await httpClient.post("/auth/logout");
   }
 
   static googleAuthUrl() {
