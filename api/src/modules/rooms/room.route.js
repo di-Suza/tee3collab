@@ -5,7 +5,9 @@ import {
   validateCreate,
   validateJoin,
   validateJoinInvite,
+  validateMemberParam,
   validateRoomCodeParam,
+  validateUpdate,
 } from "./room.validator.js";
 
 class RoomRoute {
@@ -45,6 +47,38 @@ class RoomRoute {
       "/code",
       AuthMiddleware.handle,
       this.controller.generateCode.bind(this.controller),
+    );
+    this.router.get(
+      "/:roomCode",
+      AuthMiddleware.handle,
+      validateRoomCodeParam,
+      this.controller.detail.bind(this.controller),
+    );
+    this.router.patch(
+      "/:roomCode",
+      AuthMiddleware.handle,
+      validateRoomCodeParam,
+      validateUpdate,
+      this.controller.update.bind(this.controller),
+    );
+    this.router.delete(
+      "/:roomCode",
+      AuthMiddleware.handle,
+      validateRoomCodeParam,
+      this.controller.delete.bind(this.controller),
+    );
+    this.router.delete(
+      "/:roomCode/members/:memberId",
+      AuthMiddleware.handle,
+      validateRoomCodeParam,
+      validateMemberParam,
+      this.controller.removeMember.bind(this.controller),
+    );
+    this.router.post(
+      "/:roomCode/leave",
+      AuthMiddleware.handle,
+      validateRoomCodeParam,
+      this.controller.leave.bind(this.controller),
     );
     this.router.patch(
       "/:roomCode/close",

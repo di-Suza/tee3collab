@@ -34,6 +34,32 @@ class RoomRepository {
     );
   }
 
+  async updateRoom(roomId, updates) {
+    return await Room.findByIdAndUpdate(
+      roomId,
+      updates,
+      { new: true, runValidators: true },
+    )
+      .select("-password")
+      .populate("createdBy", "name email picture")
+      .populate("members", "name email picture");
+  }
+
+  async removeMember(roomId, userId) {
+    return await Room.findByIdAndUpdate(
+      roomId,
+      { $pull: { members: userId } },
+      { new: true },
+    )
+      .select("-password")
+      .populate("createdBy", "name email picture")
+      .populate("members", "name email picture");
+  }
+
+  async deleteRoom(roomId) {
+    return await Room.findByIdAndDelete(roomId).select("-password");
+  }
+
   async closeRoom(roomId) {
     return await Room.findByIdAndUpdate(
       roomId,

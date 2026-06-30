@@ -1,8 +1,14 @@
 import { httpClient } from "../../../shared/api/http-client.js";
 
 export class RoomService {
-  static async createRoom({ roomCode, password, members = [] }) {
-    const res = await httpClient.post("/rooms/create", { roomCode, password, members });
+  static async createRoom({ roomCode, password, members = [], name, description }) {
+    const res = await httpClient.post("/rooms/create", {
+      roomCode,
+      password,
+      members,
+      name,
+      description,
+    });
     return res.data.data;
   }
 
@@ -23,6 +29,31 @@ export class RoomService {
 
   static async getHistory() {
     const res = await httpClient.get("/rooms/history");
+    return res.data.data;
+  }
+
+  static async getRoom(roomCode) {
+    const res = await httpClient.get(`/rooms/${roomCode}`);
+    return res.data.data;
+  }
+
+  static async updateRoom(roomCode, payload) {
+    const res = await httpClient.patch(`/rooms/${roomCode}`, payload);
+    return res.data.data;
+  }
+
+  static async deleteRoom(roomCode) {
+    const res = await httpClient.delete(`/rooms/${roomCode}`);
+    return res.data.data;
+  }
+
+  static async removeMember(roomCode, memberId) {
+    const res = await httpClient.delete(`/rooms/${roomCode}/members/${memberId}`);
+    return res.data.data;
+  }
+
+  static async leaveRoom(roomCode) {
+    const res = await httpClient.post(`/rooms/${roomCode}/leave`);
     return res.data.data;
   }
 

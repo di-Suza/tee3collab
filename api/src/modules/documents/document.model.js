@@ -46,6 +46,90 @@ const patchHistorySchema = new mongoose.Schema(
   },
 );
 
+const lineAuthorSchema = new mongoose.Schema(
+  {
+    lineNumber: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    actorId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    actorName: {
+      type: String,
+      trim: true,
+      default: "Someone",
+    },
+    actorPicture: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    version: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+const conflictMarkerSchema = new mongoose.Schema(
+  {
+    lineNumber: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    reason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    type: {
+      type: String,
+      trim: true,
+      default: "POSITION_SHIFT",
+    },
+    actorId: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    actorName: {
+      type: String,
+      trim: true,
+      default: "Someone",
+    },
+    version: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
 const documentSchema = new mongoose.Schema(
   {
     roomId: {
@@ -79,6 +163,14 @@ const documentSchema = new mongoose.Schema(
     },
     patchHistory: {
       type: [patchHistorySchema],
+      default: [],
+    },
+    lineAuthors: {
+      type: [lineAuthorSchema],
+      default: [],
+    },
+    conflictMarkers: {
+      type: [conflictMarkerSchema],
       default: [],
     },
   },

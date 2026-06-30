@@ -1,6 +1,7 @@
 const SOCKET_EVENTS = Object.freeze({
   ROOM_JOIN: "room:join",
   ROOM_LEAVE: "room:leave",
+  ROOM_DELETED: "room:deleted",
   ROOM_PARTICIPANTS: "room:participants",
   ROOM_SYNC_ERROR: "room:sync:error",
   PRESENCE_TYPING_START: "presence:typing:start",

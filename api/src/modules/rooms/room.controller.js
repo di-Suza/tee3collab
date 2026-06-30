@@ -1,5 +1,7 @@
 import { RoomService } from "./room.service.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { SOCKET_EVENTS } from "../../shared/constants/socketEvents.js";
+import { SocketRegistry } from "../../sockets/socketRegistry.js";
 
 class RoomController {
   constructor(roomService) {
@@ -13,12 +15,14 @@ class RoomController {
         throw new AppError("Unauthorized", 401);
       }
 
-      const { roomCode, password, members = [] } = req.body || {};
+      const { roomCode, password, members = [], name, description } = req.body || {};
       const result = await this.roomService.createRoom({
         createdBy: user.id,
         roomCode,
         password,
         members,
+        name,
+        description,
       });
 
       return res.status(201).json({
@@ -67,6 +71,124 @@ class RoomController {
       }
 
       const room = await this.roomService.closeRoom({
+        roomCode: req.params.roomCode,
+        userId: user.id,
+      });
+
+      return res.json({
+        success: true,
+        data: { room },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async detail(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const room = await this.roomService.getRoomDetail({
+        roomCode: req.params.roomCode,
+        userId: user.id,
+      });
+
+      return res.json({
+        success: true,
+        data: { room },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async update(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const room = await this.roomService.updateRoom({
+        roomCode: req.params.roomCode,
+        userId: user.id,
+        name: req.body.name,
+        description: req.body.description,
+        password: req.body.password,
+      });
+
+      return res.json({
+        success: true,
+        data: { room },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async delete(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const room = await this.roomService.deleteRoom({
+        roomCode: req.params.roomCode,
+        userId: user.id,
+      });
+      const io = SocketRegistry.getServer();
+
+      if (io && room?.roomCode) {
+        io.to(room.roomCode).emit(SOCKET_EVENTS.ROOM_DELETED, {
+          roomCode: room.roomCode,
+          deletedBy: user.id,
+          message: "Room deleted",
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { room },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async removeMember(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const room = await this.roomService.removeMember({
+        roomCode: req.params.roomCode,
+        userId: user.id,
+        memberId: req.params.memberId,
+      });
+
+      return res.json({
+        success: true,
+        data: { room },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async leave(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const room = await this.roomService.leaveRoom({
         roomCode: req.params.roomCode,
         userId: user.id,
       });

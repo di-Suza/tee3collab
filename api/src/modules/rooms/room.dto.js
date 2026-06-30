@@ -11,6 +11,8 @@ class RoomDTO {
 
     return {
       id: room._id,
+      name: room.name || "Untitled Room",
+      description: room.description || "",
       roomCode: room.roomCode,
       status: room.status,
       createdBy,
