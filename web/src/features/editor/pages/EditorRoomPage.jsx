@@ -167,9 +167,9 @@ export function EditorRoomPage() {
     >
       <div className="min-h-screen w-full bg-black/90 backdrop-blur-md">
         {showInviteModal && createdRoomInvite ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
-              <div className="mb-6">
+          <div className="fixed inset-0 z-50 grid min-h-dvh place-items-center overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-sm">
+            <div className="max-h-[calc(100dvh-48px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+              <div className="mb-5">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
                   Room Created
                 </p>
@@ -179,7 +179,7 @@ export function EditorRoomPage() {
                 </p>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
                   <p className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Room ID</p>
                   <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black p-3">
@@ -230,7 +230,7 @@ export function EditorRoomPage() {
               </div>
 
               <button
-                className="mt-6 w-full rounded-2xl bg-white py-3 text-sm font-bold text-black transition-all hover:bg-zinc-200"
+                className="mt-5 w-full rounded-2xl bg-white py-3 text-sm font-bold text-black transition-all hover:bg-zinc-200"
                 onClick={() => setShowInviteModal(false)}
                 type="button"
               >
