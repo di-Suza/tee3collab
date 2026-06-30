@@ -137,6 +137,16 @@ class AuthService {
       accessToken,
     };
   }
+
+  async logout(userId) {
+    if (!userId) {
+      throw new AppError("Unauthorized", 401);
+    }
+
+    await this.authRepository.clearRefreshToken(userId);
+
+    return true;
+  }
 }
 
 export { AuthService };

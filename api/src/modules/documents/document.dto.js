@@ -24,6 +24,7 @@ class DocumentDTO {
     return {
       roomCode: document.roomCode,
       version: document.version,
+      content: document.content,
       patch,
       conflict: conflict || null,
       updatedAt: document.updatedAt,

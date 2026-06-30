@@ -6,7 +6,7 @@ import RoomService from "../services/room.service.js";
 import { setCurrentRoom, setLoading, setError } from "../roomsSlice.js";
 
 const JoinLobby = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
   // State for the inputs

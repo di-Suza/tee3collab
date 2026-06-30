@@ -6,6 +6,11 @@ export class RoomService {
     return res.data.data;
   }
 
+  static async getUniqueRoomCode() {
+    const res = await httpClient.get("/rooms/code");
+    return res.data.data;
+  }
+
   static async joinRoom(payload) {
     const res = await httpClient.post("/rooms/join", payload);
     return res.data.data;

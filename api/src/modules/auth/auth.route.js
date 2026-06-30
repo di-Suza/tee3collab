@@ -41,6 +41,12 @@ class AuthRoute {
     );
 
     this.router.post(
+      "/logout",
+      AuthMiddleware.handle,
+      this.controller.logout.bind(this.controller),
+    );
+
+    this.router.post(
       "/refresh-token",
       this.controller.refreshToken.bind(this.controller),
     );

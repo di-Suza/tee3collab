@@ -22,6 +22,14 @@ class AuthRepository {
     );
   }
 
+  async clearRefreshToken(userId) {
+    return await User.findByIdAndUpdate(
+      userId,
+      { $unset: { refreshToken: "" } },
+      { new: true },
+    );
+  }
+
   async updateProfile(userId, profileData) {
     return await User.findByIdAndUpdate(
       userId,

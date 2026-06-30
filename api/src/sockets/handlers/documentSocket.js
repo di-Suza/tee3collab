@@ -52,7 +52,7 @@ class DocumentSocketHandler {
         },
       };
 
-      this.io.to(normalizedRoomCode).emit(SOCKET_EVENTS.DOCUMENT_PATCH_APPLIED, payload);
+      this.socket.to(normalizedRoomCode).emit(SOCKET_EVENTS.DOCUMENT_PATCH_APPLIED, payload);
 
       if (typeof acknowledge === "function") {
         acknowledge({ ok: true, data: payload });
@@ -62,21 +62,22 @@ class DocumentSocketHandler {
     }
   }
 
-  handleTypingStart({ roomCode } = {}) {
-    this.emitTyping(roomCode, true);
+  handleTypingStart({ roomCode, lineNumber } = {}) {
+    this.emitTyping(roomCode, true, { lineNumber });
   }
 
   handleTypingStop({ roomCode } = {}) {
     this.emitTyping(roomCode, false);
   }
 
-  emitTyping(roomCode, isTyping) {
+  emitTyping(roomCode, isTyping, meta = {}) {
     try {
       const normalizedRoomCode = this.normalizeRoomCode(roomCode);
 
       this.socket.to(normalizedRoomCode).emit(SOCKET_EVENTS.DOCUMENT_TYPING, {
         roomCode: normalizedRoomCode,
         isTyping,
+        lineNumber: meta.lineNumber || null,
         actor: {
           id: this.socket.user.id,
           name: this.socket.user.name,
