@@ -1,6 +1,5 @@
 import {
   ArrowRight,
-  Copy,
   DoorOpen,
   History,
   Plus,
@@ -16,16 +15,6 @@ import AuthService from "../../auth/services/auth.service.js";
 import { setUser } from "../../auth/authSlice.js";
 import RoomService from "../services/room.service.js";
 import { setCurrentRoom, setRoomHistory, setLoading, setError } from "../roomsSlice.js";
-
-const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function generateRoomCode() {
-  let code = "";
-  for (let index = 0; index < 6; index += 1) {
-    code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
-  }
-  return code;
-}
 
 function formatDate(value) {
   if (!value) return "Just now";
@@ -49,7 +38,6 @@ export function RoomLobbyPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileEditing, setProfileEditing] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
-  const [createRoomCode] = useState(generateRoomCode);
   const [profileName, setProfileName] = useState(user?.name || "");
   const [profilePicture, setProfilePicture] = useState(user?.picture || "");
   const inviteHandledRef = useRef("");
@@ -116,12 +104,6 @@ export function RoomLobbyPage() {
     } catch (err) {
       dispatch(setError(err.response?.data?.message || err.message || "Failed to save profile"));
     } finally { setSavingProfile(false); }
-  };
-
-  const handleCopy = async (text) => {
-    if (!navigator.clipboard) return;
-    await navigator.clipboard.writeText(text);
-    setLocalMessage("Copied");
   };
 
   // Modernized Room List Renderer
@@ -289,19 +271,6 @@ export function RoomLobbyPage() {
                   <UserRound size={14} /> Edit Profile
                 </button>
               )}
-            </div>
-
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-6 backdrop-blur-md">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-3">Quick Invite</p>
-              <div className="p-3 bg-black border border-zinc-700 rounded-xl font-mono text-xs text-zinc-300 break-all mb-3">
-                {`${window.location.origin}/join/${createRoomCode}`}
-              </div>
-              <button
-                onClick={() => handleCopy(`${window.location.origin}/join/${createRoomCode}`)}
-                className="w-full py-2 rounded-xl border border-zinc-800 text-xs text-zinc-400 hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
-              >
-                <Copy size={14} /> Copy Link
-              </button>
             </div>
           </aside>
         </main>

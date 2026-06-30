@@ -1,6 +1,6 @@
 import Editor from "@monaco-editor/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { DocumentService } from "../services/document.service.js";
 import { EditorSocketService } from "../services/editor-socket.service.js";
@@ -14,10 +14,11 @@ import { ArrowLeft, Copy, Zap, Shield, Globe } from "lucide-react";
 export function EditorRoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const room = useSelector((state) => state.rooms.currentRoom);
 
   const displayCode = room?.roomCode || roomCode;
-  const joinLink = room?.joinLink || `${window.location.origin}/join/${displayCode}`;
+  const createdRoomInvite = location.state?.createdRoomInvite || null;
 
   const [content, setContent] = useState("");
   const [version, setVersion] = useState(0);
@@ -27,6 +28,7 @@ export function EditorRoomPage() {
   const [typingUser, setTypingUser] = useState(null);
   const [lastActor, setLastActor] = useState(null);
   const [conflict, setConflict] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(Boolean(createdRoomInvite));
 
   const socketRef = useRef(null);
   const clientIdRef = useRef("");
@@ -145,6 +147,14 @@ export function EditorRoomPage() {
     [displayCode, loading],
   );
 
+  const copyToClipboard = useCallback(async (value) => {
+    if (!navigator.clipboard || !value) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(value);
+  }, []);
+
   return (
     <div 
       className="min-h-screen w-full text-white font-sans selection:bg-zinc-700"
@@ -156,6 +166,79 @@ export function EditorRoomPage() {
       }}
     >
       <div className="min-h-screen w-full bg-black/90 backdrop-blur-md">
+        {showInviteModal && createdRoomInvite ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+              <div className="mb-6">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                  Room Created
+                </p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight">Share invite details</h2>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Copy these once and share them with teammates who need to join this room.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Room ID</p>
+                  <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black p-3">
+                    <span className="flex-1 font-mono text-sm">{createdRoomInvite.roomCode}</span>
+                    <button
+                      className="text-zinc-500 transition-colors hover:text-white"
+                      onClick={() => copyToClipboard(createdRoomInvite.roomCode)}
+                      type="button"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Password</p>
+                  <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black p-3">
+                    <span className="flex-1 font-mono text-sm">
+                      {createdRoomInvite.password || "No password provided"}
+                    </span>
+                    {createdRoomInvite.password ? (
+                      <button
+                        className="text-zinc-500 transition-colors hover:text-white"
+                        onClick={() => copyToClipboard(createdRoomInvite.password)}
+                        type="button"
+                      >
+                        <Copy size={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[10px] uppercase tracking-widest text-zinc-600">Invite Link</p>
+                  <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black p-3">
+                    <span className="flex-1 break-all font-mono text-xs text-zinc-300">
+                      {createdRoomInvite.joinLink}
+                    </span>
+                    <button
+                      className="text-zinc-500 transition-colors hover:text-white"
+                      onClick={() => copyToClipboard(createdRoomInvite.joinLink)}
+                      type="button"
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="mt-6 w-full rounded-2xl bg-white py-3 text-sm font-bold text-black transition-all hover:bg-zinc-200"
+                onClick={() => setShowInviteModal(false)}
+                type="button"
+              >
+                Continue to Editor
+              </button>
+            </div>
+          </div>
+        ) : null}
         
         {/* --- TOP NAV --- */}
         <nav className="flex items-center justify-between px-8 py-4 border-b border-zinc-800">
@@ -265,12 +348,6 @@ export function EditorRoomPage() {
                     <button onClick={() => navigator.clipboard.writeText(displayCode)} className="text-zinc-500 hover:text-white transition-colors">
                       <Copy size={14} />
                     </button>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] text-zinc-600 mb-1">Collaboration Link</p>
-                  <div className="p-3 bg-black rounded-xl border border-zinc-800 text-xs text-zinc-400 break-all font-mono">
-                    {joinLink}
                   </div>
                 </div>
               </div>

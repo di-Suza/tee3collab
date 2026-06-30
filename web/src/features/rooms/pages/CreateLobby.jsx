@@ -32,7 +32,15 @@ const CreateLobby = () => {
       dispatch(setLoading(true));
       const result = await RoomService.createRoom({ roomCode, password, members: [] });
       dispatch(setCurrentRoom(result.room));
-      navigate(`/app/rooms/${result.room.roomCode}`);
+      navigate(`/app/rooms/${result.room.roomCode}`, {
+        state: {
+          createdRoomInvite: {
+            roomCode: result.room.roomCode,
+            password,
+            joinLink: result.joinLink,
+          },
+        },
+      });
     } catch (error) {
       dispatch(setError(error.response?.data?.message || error.message || "Failed to create room"));
     } finally {
