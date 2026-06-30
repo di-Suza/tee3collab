@@ -45,6 +45,10 @@ export class EditorSocketService {
     this.socket.on("room:participants", handler);
   }
 
+  onRoomDeleted(handler) {
+    this.socket.on("room:deleted", handler);
+  }
+
   onRoomError(handler) {
     this.socket.on("room:sync:error", handler);
   }

@@ -210,6 +210,7 @@ export function EditorRoomPage() {
   const applyingRemoteRef = useRef(false);
   const sendingPatchRef = useRef(false);
   const flushQueuedRef = useRef(false);
+  const localRoomDeleteRef = useRef(false);
   const typingTimerRef = useRef(null);
   const remoteTypingTimersRef = useRef(new Map());
   const conflictClearTimerRef = useRef(null);
@@ -774,6 +775,15 @@ export function EditorRoomPage() {
       applyParticipantsPayload(payload);
     });
 
+    socketService.onRoomDeleted((payload = {}) => {
+      if (!mounted) return;
+      if (localRoomDeleteRef.current) return;
+
+      window.alert(payload.message || "Room deleted");
+      dispatch(clearCurrentRoom());
+      navigate("/app", { replace: true });
+    });
+
     socketService.onTyping((payload) => {
       if (!mounted) return;
       const actor = payload.actor || { name: "Someone" };
@@ -838,7 +848,9 @@ export function EditorRoomPage() {
     applyParticipantsPayload,
     applySnapshot,
     displayCode,
+    dispatch,
     handleRemotePatchApplied,
+    navigate,
     refreshEditorDecorations,
     refreshParticipantActivity,
   ]);
@@ -928,11 +940,13 @@ export function EditorRoomPage() {
     if (!window.confirm(`Delete room ${displayCode}? This removes it for everyone.`)) return;
 
     try {
+      localRoomDeleteRef.current = true;
       setRoomActionLoading(true);
       await RoomService.deleteRoom(displayCode);
       dispatch(clearCurrentRoom());
       navigate("/app", { replace: true });
     } catch (err) {
+      localRoomDeleteRef.current = false;
       setError(err.response?.data?.message || err.message || "Failed to delete room");
     } finally {
       setRoomActionLoading(false);

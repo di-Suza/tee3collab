@@ -2,6 +2,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { DocumentSocketHandler } from "./handlers/documentSocket.js";
 import { RoomSocketHandler } from "./handlers/roomSocket.js";
 import { SocketAuthMiddleware } from "./middleware/socketAuth.js";
+import { SocketRegistry } from "./socketRegistry.js";
 
 class SocketGateway {
   constructor(httpServer) {
@@ -11,6 +12,7 @@ class SocketGateway {
 
   init(options = {}) {
     this.io = new SocketIOServer(this.httpServer, options);
+    SocketRegistry.setServer(this.io);
     this.registerMiddleware();
     this.registerHandlers();
     return this.io;

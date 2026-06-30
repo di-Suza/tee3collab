@@ -1,5 +1,7 @@
 import { RoomService } from "./room.service.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { SOCKET_EVENTS } from "../../shared/constants/socketEvents.js";
+import { SocketRegistry } from "../../sockets/socketRegistry.js";
 
 class RoomController {
   constructor(roomService) {
@@ -138,6 +140,15 @@ class RoomController {
         roomCode: req.params.roomCode,
         userId: user.id,
       });
+      const io = SocketRegistry.getServer();
+
+      if (io && room?.roomCode) {
+        io.to(room.roomCode).emit(SOCKET_EVENTS.ROOM_DELETED, {
+          roomCode: room.roomCode,
+          deletedBy: user.id,
+          message: "Room deleted",
+        });
+      }
 
       return res.json({
         success: true,
