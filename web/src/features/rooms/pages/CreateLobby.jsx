@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { Zap, RefreshCw, Lock, Hash, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import RoomService from "../services/room.service.js";
+import { setCurrentRoom, setLoading, setError } from "../roomsSlice.js";
 
 // The logic provided in your snippet
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -14,6 +17,7 @@ function generateRoomCode() {
 
 const CreateLobby = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [roomCode, setRoomCode] = useState(generateRoomCode());
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -25,17 +29,15 @@ const CreateLobby = () => {
   const handleCreate = async () => {
     setIsLoading(true);
     try {
-      // Here you would call your RoomService.createRoom({ roomCode, password, members: [] })
-      console.log("Creating room with:", { roomCode, password });
-      
-      // Simulate API Call
-      await new Promise((res) => setTimeout(res, 1500));
-      
-      // navigate(`/app/rooms/${roomCode}`);
+      dispatch(setLoading(true));
+      const result = await RoomService.createRoom({ roomCode, password, members: [] });
+      dispatch(setCurrentRoom(result.room));
+      navigate(`/app/rooms/${result.room.roomCode}`);
     } catch (error) {
-      console.error("Error creating room", error);
+      dispatch(setError(error.response?.data?.message || error.message || "Failed to create room"));
     } finally {
       setIsLoading(false);
+      dispatch(setLoading(false));
     }
   };
 

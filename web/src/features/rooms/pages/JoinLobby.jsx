@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Key, Lock, ArrowRight, ShieldCheck } from "lucide-react";
+import { useDispatch } from "react-redux";
+import RoomService from "../services/room.service.js";
+import { setCurrentRoom, setLoading, setError } from "../roomsSlice.js";
 
 const JoinLobby = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -10,6 +13,7 @@ const JoinLobby = () => {
   const [roomCode, setRoomCode] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const dispatch = useDispatch();
 
   // 1. HANDLE LINK JOINING: 
   // If the URL is /join?joinRoomCode=ABC123, automatically fill the input
@@ -25,19 +29,16 @@ const JoinLobby = () => {
     
     setIsLoading(true);
     try {
-      // Replace this with your actual RoomService.joinRoom call
-      console.log("Joining room:", { roomCode, password });
-      
-      // Example: await RoomService.joinRoom({ roomCode, password });
-      // navigate(`/app/rooms/${roomCode}`);
-      
-      // Simulating API call for now
-      await new Promise((res) => setTimeout(res, 1500));
-      navigate(`/app/rooms/${roomCode}`);
+      dispatch(setLoading(true));
+      const res = await RoomService.joinRoom({ roomCode, password });
+      dispatch(setCurrentRoom(res.room));
+      navigate(`/app/rooms/${res.room.roomCode}`);
     } catch (error) {
-      alert(error.message || "Failed to join room");
+      dispatch(setError(error.response?.data?.message || error.message || "Failed to join room"));
+      alert(error.response?.data?.message || error.message || "Failed to join room");
     } finally {
       setIsLoading(false);
+      dispatch(setLoading(false));
     }
   };
 

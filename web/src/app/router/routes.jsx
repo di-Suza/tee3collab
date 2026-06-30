@@ -25,8 +25,10 @@ export const router = createBrowserRouter([
     element: <PrivateLayout />,
     children: [
       // {index: true, element: <HomeLobbyPage/>},
-      { index: true, element: <CreateLobby/>},
+      { index: true, element: <RoomLobbyPage/>},
       { path: "rooms/:roomCode", element: <EditorRoomPage /> },
+      { path: "create-lobby", element: <CreateLobby /> },
+      { path: "join-lobby", element: <JoinLobby /> },
     ],
   },
 
