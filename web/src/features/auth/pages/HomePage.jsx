@@ -3,7 +3,7 @@ import React from "react";
 const HomePage = () => {
   const googleAuthhandler = () => {
     // Redirect to the backend endpoint for Google OAuth
-    window.location.href = "http://localhost:5000/api/v1/auth/google";
+    window.location.href = "https://tee3collab.onrender.com/api/v1/auth/google";
   };
   const languages = [
     {
