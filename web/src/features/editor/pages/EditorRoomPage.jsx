@@ -1,5 +1,6 @@
 import Editor from "@monaco-editor/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { DocumentService } from "../services/document.service.js";
@@ -155,6 +156,19 @@ export function EditorRoomPage() {
     await navigator.clipboard.writeText(value);
   }, []);
 
+  useEffect(() => {
+    if (!showInviteModal || !createdRoomInvite) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [createdRoomInvite, showInviteModal]);
+
   return (
     <div 
       className="min-h-screen w-full text-white font-sans selection:bg-zinc-700"
@@ -167,7 +181,8 @@ export function EditorRoomPage() {
     >
       <div className="min-h-screen w-full bg-black/90 backdrop-blur-md">
         {showInviteModal && createdRoomInvite ? (
-          <div className="fixed inset-0 z-50 grid min-h-dvh place-items-center overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-sm">
+          createPortal(
+          <div className="fixed left-0 top-0 z-[9999] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/80 p-4 backdrop-blur-sm">
             <div className="max-h-[calc(100dvh-48px)] w-full max-w-lg overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
               <div className="mb-5">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
@@ -237,7 +252,9 @@ export function EditorRoomPage() {
                 Continue to Editor
               </button>
             </div>
-          </div>
+          </div>,
+          document.body,
+          )
         ) : null}
         
         {/* --- TOP NAV --- */}
