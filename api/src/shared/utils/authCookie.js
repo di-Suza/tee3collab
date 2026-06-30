@@ -5,7 +5,7 @@ class AuthCookieUtil {
     return {
       httpOnly: true,
       secure: EnvConfig.get("NODE_ENV") === "production",
-      sameSite: "strict",
+      sameSite: "none",
       maxAge: 24 * 60 * 60 * 1000,
     };
   }
@@ -14,7 +14,7 @@ class AuthCookieUtil {
     return {
       httpOnly: true,
       secure: EnvConfig.get("NODE_ENV") === "production",
-      sameSite: "strict",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     };
   }
