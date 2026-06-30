@@ -9,6 +9,13 @@ class RoomRepository {
     return await Room.findOne({ roomCode });
   }
 
+  async findByCodeWithMembers(roomCode) {
+    return await Room.findOne({ roomCode })
+      .select("-password")
+      .populate("createdBy", "name email picture")
+      .populate("members", "name email picture");
+  }
+
   async findHistoryByUser(userId) {
     return await Room.find({
       $or: [{ createdBy: userId }, { members: userId }],

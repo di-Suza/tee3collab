@@ -18,12 +18,12 @@ class DocumentSocketHandler {
   async handleJoin({ roomCode } = {}, acknowledge) {
     try {
       const normalizedRoomCode = this.normalizeRoomCode(roomCode);
-      this.socket.join(normalizedRoomCode);
-
       const snapshot = await this.documentService.getSnapshot(
         normalizedRoomCode,
         this.socket.user,
       );
+
+      this.socket.join(normalizedRoomCode);
       this.socket.emit(SOCKET_EVENTS.DOCUMENT_SNAPSHOT, snapshot);
 
       if (typeof acknowledge === "function") {
@@ -45,11 +45,7 @@ class DocumentSocketHandler {
 
       const payload = {
         ...result,
-        actor: {
-          id: this.socket.user.id,
-          name: this.socket.user.name,
-          picture: this.socket.user.picture,
-        },
+        actor: this.getActorPayload(),
       };
 
       this.socket.to(normalizedRoomCode).emit(SOCKET_EVENTS.DOCUMENT_PATCH_APPLIED, payload);
@@ -78,11 +74,7 @@ class DocumentSocketHandler {
         roomCode: normalizedRoomCode,
         isTyping,
         lineNumber: meta.lineNumber || null,
-        actor: {
-          id: this.socket.user.id,
-          name: this.socket.user.name,
-          picture: this.socket.user.picture,
-        },
+        actor: this.getActorPayload(),
       });
     } catch (error) {
       this.socket.emit(SOCKET_EVENTS.DOCUMENT_SYNC_ERROR, {
@@ -90,6 +82,14 @@ class DocumentSocketHandler {
         code: error.code || "DOCUMENT_SYNC_ERROR",
       });
     }
+  }
+
+  getActorPayload() {
+    return {
+      id: this.socket.user.id,
+      name: this.socket.user.name,
+      picture: this.socket.user.picture,
+    };
   }
 
   normalizeRoomCode(roomCode) {

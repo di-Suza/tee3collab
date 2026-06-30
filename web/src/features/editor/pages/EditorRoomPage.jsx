@@ -48,6 +48,21 @@ function actorName(actor = {}) {
   return actor.isSelf ? "You" : actor.name || "Someone";
 }
 
+function actorPresenceKey(actor = {}) {
+  return String(actor.id || actor._id || actor.name || "remote");
+}
+
+function participantInitials(name = "") {
+  const parts = String(name || "User").trim().split(/\s+/).slice(0, 2);
+  return parts.map((part) => part[0]?.toUpperCase()).join("") || "U";
+}
+
+function participantName(participant = {}, currentUserId = "") {
+  return String(participant.id) === String(currentUserId)
+    ? "You"
+    : participant.name || "Unknown user";
+}
+
 function changedLinesForPatch(content = "", patch = {}) {
   const safePosition = Math.min(Math.max(patch.position || 0, 0), content.length);
   const deleteEnd = Math.min(safePosition + (patch.deleteCount || 0), content.length);
@@ -109,8 +124,10 @@ export function EditorRoomPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const room = useSelector((state) => state.rooms.currentRoom);
+  const currentUser = useSelector((state) => state.auth.user);
 
   const displayCode = room?.roomCode || roomCode;
+  const currentUserId = String(currentUser?.id || currentUser?._id || "");
   const createdRoomInvite = location.state?.createdRoomInvite || null;
 
   const [content, setContent] = useState("");
@@ -118,6 +135,8 @@ export function EditorRoomPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
   const [typingUser, setTypingUser] = useState(null);
+  const [participants, setParticipants] = useState([]);
+  const [presenceSummary, setPresenceSummary] = useState({ onlineCount: 0, totalCount: 0 });
   const [lastActor, setLastActor] = useState(null);
   const [conflict, setConflict] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(Boolean(createdRoomInvite));
@@ -136,12 +155,48 @@ export function EditorRoomPage() {
   const sendingPatchRef = useRef(false);
   const flushQueuedRef = useRef(false);
   const typingTimerRef = useRef(null);
-  const remoteTypingTimerRef = useRef(null);
+  const remoteTypingTimersRef = useRef(new Map());
   const conflictClearTimerRef = useRef(null);
   const decorationIdsRef = useRef([]);
   const lineAuthorsRef = useRef(new Map());
   const typingIndicatorsRef = useRef(new Map());
+  const participantActivityRef = useRef(new Map());
+  const participantsRef = useRef([]);
   const conflictMarkersRef = useRef(new Map());
+
+  const decorateParticipants = useCallback((nextParticipants = []) => {
+    return nextParticipants.map((participant) => {
+      const activity = participantActivityRef.current.get(actorPresenceKey(participant));
+
+      return {
+        ...participant,
+        isTyping: Boolean(activity),
+        typingLine: activity?.lineNumber || null,
+      };
+    });
+  }, []);
+
+  const refreshParticipantActivity = useCallback(() => {
+    setParticipants(decorateParticipants(participantsRef.current));
+  }, [decorateParticipants]);
+
+  const applyParticipantsPayload = useCallback(
+    (payload = {}) => {
+      const nextParticipants = Array.isArray(payload.participants)
+        ? payload.participants
+        : [];
+
+      participantsRef.current = nextParticipants;
+      setPresenceSummary({
+        onlineCount: payload.onlineCount ?? nextParticipants.filter(
+          (participant) => participant.status === "online",
+        ).length,
+        totalCount: payload.totalCount ?? nextParticipants.length,
+      });
+      setParticipants(decorateParticipants(nextParticipants));
+    },
+    [decorateParticipants],
+  );
 
   const refreshEditorDecorations = useCallback(() => {
     const editor = editorRef.current;
@@ -549,6 +604,23 @@ export function EditorRoomPage() {
     let mounted = true;
     const socketService = new EditorSocketService();
     socketRef.current = socketService;
+    const joinRealtimeRoom = () => {
+      socketService.joinRoom(displayCode, (ack) => {
+        if (!mounted) return;
+        if (!ack?.ok) {
+          setError(ack?.error?.message || "Unable to join room presence");
+          return;
+        }
+
+        applyParticipantsPayload(ack.data);
+      });
+
+      socketService.joinDocument(displayCode, (ack) => {
+        if (mounted && ack && !ack.ok) {
+          setError(ack.error?.message || "Unable to join document sync");
+        }
+      });
+    };
 
     DocumentService.getDocument(displayCode)
       .then((snapshot) => {
@@ -561,7 +633,14 @@ export function EditorRoomPage() {
         }
       });
 
-    socketService.onConnectionChange(setConnected);
+    socketService.onConnectionChange((isConnected) => {
+      if (!mounted) return;
+      setConnected(isConnected);
+
+      if (isConnected) {
+        joinRealtimeRoom();
+      }
+    });
     socketService.onSnapshot((snapshot) => {
       if (mounted) applySnapshot(snapshot);
     });
@@ -571,43 +650,79 @@ export function EditorRoomPage() {
       handleRemotePatchApplied(payload);
     });
 
+    socketService.onParticipants((payload) => {
+      if (!mounted) return;
+      applyParticipantsPayload(payload);
+    });
+
     socketService.onTyping((payload) => {
       if (!mounted) return;
+      const actor = payload.actor || { name: "Someone" };
+      const actorKey = actorPresenceKey(actor);
+
       if (payload.isTyping) {
-        const actor = payload.actor || { name: "Someone" };
         setTypingUser(actor.name || "Someone");
-        typingIndicatorsRef.current.set(actor.id || actor.name || "remote", {
+        participantActivityRef.current.set(actorKey, { lineNumber: payload.lineNumber || 1 });
+        typingIndicatorsRef.current.set(actorKey, {
           actor,
           lineNumber: payload.lineNumber || 1,
         });
         refreshEditorDecorations();
-        window.clearTimeout(remoteTypingTimerRef.current);
-        remoteTypingTimerRef.current = window.setTimeout(() => {
-          typingIndicatorsRef.current.delete(actor.id || actor.name || "remote");
+        refreshParticipantActivity();
+
+        window.clearTimeout(remoteTypingTimersRef.current.get(actorKey));
+        remoteTypingTimersRef.current.set(actorKey, window.setTimeout(() => {
+          participantActivityRef.current.delete(actorKey);
+          typingIndicatorsRef.current.delete(actorKey);
+          remoteTypingTimersRef.current.delete(actorKey);
           refreshEditorDecorations();
+          refreshParticipantActivity();
           setTypingUser(null);
-        }, 1800);
+        }, 1800));
       } else {
-        const actor = payload.actor || { name: "Someone" };
-        typingIndicatorsRef.current.delete(actor.id || actor.name || "remote");
+        window.clearTimeout(remoteTypingTimersRef.current.get(actorKey));
+        remoteTypingTimersRef.current.delete(actorKey);
+        participantActivityRef.current.delete(actorKey);
+        typingIndicatorsRef.current.delete(actorKey);
         refreshEditorDecorations();
+        refreshParticipantActivity();
         setTypingUser(null);
       }
+    });
+
+    socketService.onRoomError((payload) => {
+      if (mounted) setError(payload.message || "Room presence failed");
     });
 
     socketService.onSyncError((payload) => {
       if (mounted) setError(payload.message || "Document sync failed");
     });
 
-    socketService.joinDocument(displayCode);
+    if (socketService.isConnected()) {
+      joinRealtimeRoom();
+    }
+
+    const remoteTypingTimers = remoteTypingTimersRef.current;
+
     return () => {
       mounted = false;
       window.clearTimeout(typingTimerRef.current);
-      window.clearTimeout(remoteTypingTimerRef.current);
+      for (const timerId of remoteTypingTimers.values()) {
+        window.clearTimeout(timerId);
+      }
+      remoteTypingTimers.clear();
       window.clearTimeout(conflictClearTimerRef.current);
+      socketService.leaveRoom(displayCode);
       socketService.disconnect();
     };
-  }, [applySnapshot, displayCode, handleRemotePatchApplied, refreshEditorDecorations]);
+  }, [
+    applyParticipantsPayload,
+    applySnapshot,
+    displayCode,
+    handleRemotePatchApplied,
+    refreshEditorDecorations,
+    refreshParticipantActivity,
+  ]);
 
   const handleEditorChange = useCallback(
     (nextValue = "") => {
@@ -633,14 +748,29 @@ export function EditorRoomPage() {
       refreshEditorDecorations();
 
       const cursorLine = editorRef.current?.getPosition()?.lineNumber || lineFromOffset(nextContent, localPatch.position);
+      if (currentUserId) {
+        participantActivityRef.current.set(currentUserId, { lineNumber: cursorLine });
+        refreshParticipantActivity();
+      }
       socketRef.current?.startTyping(displayCode, { lineNumber: cursorLine });
       flushLocalChanges();
       window.clearTimeout(typingTimerRef.current);
       typingTimerRef.current = window.setTimeout(() => {
+        if (currentUserId) {
+          participantActivityRef.current.delete(currentUserId);
+          refreshParticipantActivity();
+        }
         socketRef.current?.stopTyping(displayCode);
       }, 800);
     },
-    [displayCode, flushLocalChanges, recordLineAuthor, refreshEditorDecorations],
+    [
+      currentUserId,
+      displayCode,
+      flushLocalChanges,
+      recordLineAuthor,
+      refreshEditorDecorations,
+      refreshParticipantActivity,
+    ],
   );
 
   const copyToClipboard = useCallback(async (value) => {
@@ -942,13 +1072,73 @@ export function EditorRoomPage() {
             ))}
 
             {renderAccordionPanel("presence", "Presence", Users, (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-zinc-800 bg-black/50 p-3">
-                  <p className="text-xs text-zinc-400">Live participant list will be wired by Domain C.</p>
-                  <p className="mt-2 text-[10px] uppercase tracking-widest text-zinc-600">
-                    Socket room is scoped to {displayCode}
-                  </p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-black/50 p-3">
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-200">
+                      {presenceSummary.onlineCount}/{presenceSummary.totalCount} present
+                    </p>
+                    <p className="mt-1 text-[10px] uppercase tracking-widest text-zinc-600">
+                      Room scoped to {displayCode}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-emerald-900/70 bg-emerald-950/30 px-2 py-1 text-[10px] font-bold text-emerald-300">
+                    Live
+                  </span>
                 </div>
+
+                <div className="space-y-2">
+                  {participants.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-zinc-800 bg-black/40 p-4 text-xs text-zinc-500">
+                      Waiting for room presence...
+                    </div>
+                  ) : (
+                    participants.map((participant) => {
+                      const isOnline = participant.status === "online";
+                      const displayName = participantName(participant, currentUserId);
+
+                      return (
+                        <div
+                          className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-black/50 p-3"
+                          key={participant.id}
+                        >
+                          {participant.picture ? (
+                            <img
+                              alt=""
+                              className="h-9 w-9 rounded-xl object-cover ring-1 ring-zinc-800"
+                              src={participant.picture}
+                            />
+                          ) : (
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-[11px] font-bold text-zinc-400 ring-1 ring-zinc-800">
+                              {participantInitials(displayName)}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-zinc-100">
+                                {displayName}
+                              </p>
+                              {participant.role === "host" ? (
+                                <span className="rounded-full bg-amber-950/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
+                                  Host
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className={participant.isTyping ? "text-xs text-sky-300" : "text-xs text-zinc-500"}>
+                              {participant.isTyping
+                                ? `Editing line ${participant.typingLine || 1}`
+                                : isOnline
+                                  ? "Present in editor"
+                                  : "Not present"}
+                            </p>
+                          </div>
+                          <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-zinc-700"}`} />
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
                 {typingUser ? (
                   <div className="rounded-2xl border border-sky-900/60 bg-sky-950/30 p-3 text-xs text-sky-300">
                     {typingUser} is typing right now.

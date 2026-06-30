@@ -9,6 +9,14 @@ export class EditorSocketService {
     this.socket.emit("document:join", { roomCode }, acknowledge);
   }
 
+  joinRoom(roomCode, acknowledge) {
+    this.socket.emit("room:join", { roomCode }, acknowledge);
+  }
+
+  leaveRoom(roomCode, acknowledge) {
+    this.socket.emit("room:leave", { roomCode }, acknowledge);
+  }
+
   sendPatch(roomCode, patch, acknowledge) {
     this.socket.emit("document:patch", { roomCode, patch }, acknowledge);
   }
@@ -33,6 +41,14 @@ export class EditorSocketService {
     this.socket.on("document:typing", handler);
   }
 
+  onParticipants(handler) {
+    this.socket.on("room:participants", handler);
+  }
+
+  onRoomError(handler) {
+    this.socket.on("room:sync:error", handler);
+  }
+
   onSyncError(handler) {
     this.socket.on("document:sync:error", handler);
   }
@@ -40,6 +56,10 @@ export class EditorSocketService {
   onConnectionChange(handler) {
     this.socket.on("connect", () => handler(true));
     this.socket.on("disconnect", () => handler(false));
+  }
+
+  isConnected() {
+    return this.socket.connected;
   }
 
   disconnect() {
