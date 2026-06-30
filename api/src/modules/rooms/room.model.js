@@ -1,6 +1,55 @@
-class RoomModel {
-  // Domain A will define room schema here.
-}
+import mongoose from "mongoose";
 
-export { RoomModel };
-export default RoomModel;
+const roomSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      trim: true,
+      default: "Untitled Room",
+      maxlength: 80,
+    },
+
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 240,
+    },
+
+    roomCode: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      uppercase: true,
+    },
+
+    password: {
+      type: String,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["open", "closed"],
+      default: "open",
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    members: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+  },
+  {
+    timestamps: true,
+  }
+);
+const roomModel = mongoose.model("Room", roomSchema);
+export default roomModel;

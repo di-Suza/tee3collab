@@ -7,6 +7,8 @@ import helmet from "helmet";
 import hpp from "hpp";
 import morgan from "morgan";
 import { EnvConfig } from "../../config/env.js";
+import passport from "passport";
+import "./googleOAuth.js";
 
 class SecurityMiddleware {
   static apply(app) {
@@ -19,6 +21,7 @@ class SecurityMiddleware {
         credentials: true,
       })
     );
+    app.use(passport.initialize());
     app.use(compression());
     app.use(express.json({ limit: "1mb" }));
     app.use(express.urlencoded({ extended: true, limit: "1mb" }));
