@@ -4,7 +4,7 @@ class SocketConfig {
   static getOptions() {
     return {
       cors: {
-        origin: EnvConfig.getCorsOrigins(),
+        origin: "https://tee3collab.vercel.app",
         credentials: true,
       },
     };
