@@ -356,6 +356,33 @@ export function EditorRoomPage() {
     decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations);
   }, []);
 
+  const applyDocumentMetadata = useCallback(
+    (metadata = {}) => {
+      lineAuthorsRef.current = new Map(
+        (metadata.lineAuthors || []).map((entry) => [
+          Number(entry.lineNumber),
+          {
+            ...(entry.actor || {}),
+            isSelf: String(entry.actor?.id || "") === currentUserId,
+          },
+        ]),
+      );
+
+      conflictMarkersRef.current = new Map(
+        (metadata.conflictMarkers || []).map((marker) => [
+          Number(marker.lineNumber),
+          {
+            lineNumber: Number(marker.lineNumber),
+            message: marker.message || marker.reason || "Conflict resolved near this line.",
+          },
+        ]),
+      );
+
+      refreshEditorDecorations();
+    },
+    [currentUserId, refreshEditorDecorations],
+  );
+
   const recordLineAuthor = useCallback((baseContent, patch, actor) => {
     for (const lineNumber of changedLinesForPatch(baseContent, patch)) {
       lineAuthorsRef.current.set(lineNumber, actor);
@@ -506,10 +533,11 @@ export function EditorRoomPage() {
     setContent(snapshot.content || "");
     setVersion(snapshot.version || 0);
     applySnapshotToEditor(snapshot.content || "");
+    applyDocumentMetadata(snapshot.metadata);
     window.setTimeout(() => {
       applyingRemoteRef.current = false;
     }, 0);
-  }, [applySnapshotToEditor]);
+  }, [applyDocumentMetadata, applySnapshotToEditor]);
 
   const reloadSnapshot = useCallback(async () => {
     const snapshot = await DocumentService.getDocument(displayCode);
@@ -540,10 +568,14 @@ export function EditorRoomPage() {
       setLastActor("You");
       setConflict(null);
       window.clearTimeout(conflictClearTimerRef.current);
-      recordLineAuthor(previousServerContent, acceptedPatch, actor);
+      if (payload?.metadata) {
+        applyDocumentMetadata(payload.metadata);
+      } else {
+        recordLineAuthor(previousServerContent, acceptedPatch, actor);
+      }
       refreshEditorDecorations();
     },
-    [getCurrentEditorValue, recordLineAuthor, refreshEditorDecorations],
+    [applyDocumentMetadata, getCurrentEditorValue, recordLineAuthor, refreshEditorDecorations],
   );
 
   const flushLocalChanges = useCallback(() => {
@@ -623,7 +655,11 @@ export function EditorRoomPage() {
       syncedContentRef.current = nextServerContent;
       setVersion(payload.version);
       setLastActor(actor.name || "Someone");
-      recordLineAuthor(previousServerContent, patch, actor);
+      if (payload.metadata) {
+        applyDocumentMetadata(payload.metadata);
+      } else {
+        recordLineAuthor(previousServerContent, patch, actor);
+      }
 
       if (payload.conflict) {
         showConflictMarker(editedLine, payload.conflict, actor);
@@ -660,6 +696,7 @@ export function EditorRoomPage() {
     },
     [
       applyPatchToEditor,
+      applyDocumentMetadata,
       flushLocalChanges,
       getCurrentEditorValue,
       handleOwnPatchAccepted,

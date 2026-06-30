@@ -44,7 +44,8 @@ class DocumentService {
       document,
       nextContent,
       patch,
-      actor.id,
+      actor,
+      conflict,
     );
 
     return DocumentDTO.patchAccepted(savedDocument, {
