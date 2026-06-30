@@ -2,15 +2,31 @@ import Editor from "@monaco-editor/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { DocumentService } from "../services/document.service.js";
 import { EditorSocketService } from "../services/editor-socket.service.js";
+import RoomService from "../../rooms/services/room.service.js";
+import { clearCurrentRoom, setCurrentRoom } from "../../rooms/roomsSlice.js";
 import {
   applyPatchToText,
   createClientId,
   createPatchFromChange,
 } from "../utils/text-patch.js";
-import { Activity, ArrowLeft, ChevronDown, Copy, Globe, Shield, Users, Zap } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  ChevronDown,
+  Copy,
+  DoorOpen,
+  Globe,
+  Pencil,
+  Save,
+  Shield,
+  Trash2,
+  UserMinus,
+  Users,
+  Zap,
+} from "lucide-react";
 
 const LANGUAGE_OPTIONS = [
   { label: "JavaScript", value: "javascript" },
@@ -119,14 +135,43 @@ function transformPatchAgainstPatch(patch, acceptedPatch = {}) {
   };
 }
 
+function EditorLoadingSkeleton() {
+  return (
+    <div className="flex h-full w-full flex-col bg-[#1e1e1e] p-5">
+      <div className="mb-5 flex items-center justify-between">
+        <div className="h-3 w-36 animate-pulse rounded-full bg-zinc-700" />
+        <div className="h-3 w-20 animate-pulse rounded-full bg-zinc-800" />
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: 10 }).map((_, index) => (
+          <div className="flex items-center gap-4" key={index}>
+            <div className="h-3 w-5 rounded bg-zinc-800" />
+            <div
+              className="h-3 animate-pulse rounded bg-zinc-700/80"
+              style={{ width: `${72 - (index % 4) * 12}%` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-auto rounded-xl border border-zinc-800 bg-black/30 p-4">
+        <div className="h-3 w-48 animate-pulse rounded-full bg-zinc-700" />
+        <div className="mt-3 h-2 w-72 animate-pulse rounded-full bg-zinc-800" />
+      </div>
+    </div>
+  );
+}
+
 export function EditorRoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const room = useSelector((state) => state.rooms.currentRoom);
   const currentUser = useSelector((state) => state.auth.user);
 
-  const displayCode = room?.roomCode || roomCode;
+  const [roomDetails, setRoomDetails] = useState(room || null);
+  const currentRoom = roomDetails || room;
+  const displayCode = currentRoom?.roomCode || roomCode;
   const currentUserId = String(currentUser?.id || currentUser?._id || "");
   const createdRoomInvite = location.state?.createdRoomInvite || null;
 
@@ -139,9 +184,20 @@ export function EditorRoomPage() {
   const [presenceSummary, setPresenceSummary] = useState({ onlineCount: 0, totalCount: 0 });
   const [lastActor, setLastActor] = useState(null);
   const [conflict, setConflict] = useState(null);
+  const [documentLoading, setDocumentLoading] = useState(true);
+  const [roomEditing, setRoomEditing] = useState(false);
+  const [roomName, setRoomName] = useState(room?.name || "");
+  const [roomDescription, setRoomDescription] = useState(room?.description || "");
+  const [roomPassword, setRoomPassword] = useState("");
+  const [roomActionLoading, setRoomActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(Boolean(createdRoomInvite));
   const [activePanel, setActivePanel] = useState("identity");
   const [language, setLanguage] = useState("javascript");
+
+  const currentParticipant = participants.find(
+    (participant) => String(participant.id) === currentUserId,
+  );
+  const isHost = Boolean(currentRoom?.isHost || currentParticipant?.role === "host");
 
   const socketRef = useRef(null);
   const editorRef = useRef(null);
@@ -197,6 +253,30 @@ export function EditorRoomPage() {
     },
     [decorateParticipants],
   );
+
+  const loadRoomDetails = useCallback(async () => {
+    try {
+      const result = await RoomService.getRoom(displayCode);
+      setRoomDetails(result.room);
+      setRoomName(result.room?.name || "");
+      setRoomDescription(result.room?.description || "");
+      dispatch(setCurrentRoom(result.room));
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Unable to load room details");
+    }
+  }, [dispatch, displayCode]);
+
+  useEffect(() => {
+    if (room?.roomCode === displayCode) {
+      setRoomDetails(room);
+      setRoomName(room.name || "");
+      setRoomDescription(room.description || "");
+    }
+  }, [displayCode, room]);
+
+  useEffect(() => {
+    loadRoomDetails();
+  }, [loadRoomDetails]);
 
   const refreshEditorDecorations = useCallback(() => {
     const editor = editorRef.current;
@@ -422,6 +502,7 @@ export function EditorRoomPage() {
     syncedContentRef.current = snapshot.content || "";
     versionRef.current = snapshot.version || 0;
     loadingRef.current = false;
+    setDocumentLoading(false);
     setContent(snapshot.content || "");
     setVersion(snapshot.version || 0);
     applySnapshotToEditor(snapshot.content || "");
@@ -630,6 +711,7 @@ export function EditorRoomPage() {
         if (mounted) {
           setError(err.response?.data?.message || err.message || "Unable to load document");
           loadingRef.current = false;
+          setDocumentLoading(false);
         }
       });
 
@@ -780,6 +862,85 @@ export function EditorRoomPage() {
 
     await navigator.clipboard.writeText(value);
   }, []);
+
+  const handleRoomUpdate = useCallback(async () => {
+    try {
+      setRoomActionLoading(true);
+      const payload = {
+        name: roomName,
+        description: roomDescription,
+      };
+
+      if (roomPassword) {
+        payload.password = roomPassword;
+      }
+
+      const result = await RoomService.updateRoom(displayCode, payload);
+      setRoomDetails(result.room);
+      dispatch(setCurrentRoom(result.room));
+      setRoomPassword("");
+      setRoomEditing(false);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to update room");
+    } finally {
+      setRoomActionLoading(false);
+    }
+  }, [dispatch, displayCode, roomDescription, roomName, roomPassword]);
+
+  const handleDeleteRoom = useCallback(async () => {
+    if (!window.confirm(`Delete room ${displayCode}? This removes it for everyone.`)) return;
+
+    try {
+      setRoomActionLoading(true);
+      await RoomService.deleteRoom(displayCode);
+      dispatch(clearCurrentRoom());
+      navigate("/app", { replace: true });
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to delete room");
+    } finally {
+      setRoomActionLoading(false);
+    }
+  }, [dispatch, displayCode, navigate]);
+
+  const handleLeaveRoom = useCallback(async () => {
+    if (!window.confirm(`Leave room ${displayCode} permanently?`)) return;
+
+    try {
+      setRoomActionLoading(true);
+      await RoomService.leaveRoom(displayCode);
+      dispatch(clearCurrentRoom());
+      navigate("/app", { replace: true });
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to leave room");
+    } finally {
+      setRoomActionLoading(false);
+    }
+  }, [dispatch, displayCode, navigate]);
+
+  const handleRemoveMember = useCallback(
+    async (participant) => {
+      if (!participant?.id) return;
+      if (!window.confirm(`Remove ${participant.name || "this user"} from ${displayCode}?`)) return;
+
+      try {
+        setRoomActionLoading(true);
+        const result = await RoomService.removeMember(displayCode, participant.id);
+        setRoomDetails(result.room);
+        dispatch(setCurrentRoom(result.room));
+        participantsRef.current = participantsRef.current.filter(
+          (entry) => String(entry.id) !== String(participant.id),
+        );
+        setParticipants((current) =>
+          current.filter((entry) => String(entry.id) !== String(participant.id)),
+        );
+      } catch (err) {
+        setError(err.response?.data?.message || err.message || "Failed to remove member");
+      } finally {
+        setRoomActionLoading(false);
+      }
+    },
+    [dispatch, displayCode],
+  );
 
   useEffect(() => {
     if (!showInviteModal || !createdRoomInvite) {
@@ -951,9 +1112,22 @@ export function EditorRoomPage() {
             </div>
             <button 
               onClick={() => navigate("/app")}
-              className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold hover:bg-zinc-200 transition-all"
+              className="rounded-full border border-zinc-800 px-4 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-zinc-800"
+              type="button"
             >
               Exit Room
+            </button>
+            <button
+              className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all disabled:opacity-50 ${
+                isHost
+                  ? "border border-red-900/60 text-red-300 hover:bg-red-950"
+                  : "bg-white text-black hover:bg-zinc-200"
+              }`}
+              disabled={roomActionLoading}
+              onClick={isHost ? handleDeleteRoom : handleLeaveRoom}
+              type="button"
+            >
+              {isHost ? "Delete Room" : "Leave Room"}
             </button>
           </div>
         </nav>
@@ -993,26 +1167,30 @@ export function EditorRoomPage() {
 
               {/* The Monaco Editor */}
               <div className="min-h-0 flex-1">
-                <Editor
-                  height="100%"
-                  defaultValue={content}
-                  language={language}
-                  loading="<div className='h-full w-full flex items-center justify-center text-zinc-500 font-mono'>Loading IDE...</div>"
-                  onChange={handleEditorChange}
-                  onMount={handleEditorMount}
-                  options={{
-                    fontSize: 14,
-                    glyphMargin: true,
-                    minimap: { enabled: false },
-                    quickSuggestions: true,
-                    wordBasedSuggestions: "off",
-                    suggestOnTriggerCharacters: true,
-                    tabCompletion: "on",
-                    wordWrap: "on",
-                    padding: { top: 20 },
-                  }}
-                  theme="vs-dark"
-                />
+                {documentLoading ? (
+                  <EditorLoadingSkeleton />
+                ) : (
+                  <Editor
+                    height="100%"
+                    defaultValue={content}
+                    language={language}
+                    loading={<EditorLoadingSkeleton />}
+                    onChange={handleEditorChange}
+                    onMount={handleEditorMount}
+                    options={{
+                      fontSize: 14,
+                      glyphMargin: true,
+                      minimap: { enabled: false },
+                      quickSuggestions: true,
+                      wordBasedSuggestions: "off",
+                      suggestOnTriggerCharacters: true,
+                      tabCompletion: "on",
+                      wordWrap: "on",
+                      padding: { top: 20 },
+                    }}
+                    theme="vs-dark"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1021,6 +1199,15 @@ export function EditorRoomPage() {
           <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
             {renderAccordionPanel("identity", "Room Identity", Globe, (
               <div className="space-y-4">
+                <div className="rounded-2xl border border-zinc-800 bg-black/50 p-3">
+                  <p className="text-sm font-bold text-zinc-100">
+                    {currentRoom?.name || "Untitled Room"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {currentRoom?.description || "No room description yet."}
+                  </p>
+                </div>
+
                 <div>
                   <p className="mb-1 text-[10px] text-zinc-600">Room Code</p>
                   <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-black p-3">
@@ -1068,6 +1255,80 @@ export function EditorRoomPage() {
                     </button>
                   </div>
                 </div>
+
+                {isHost ? (
+                  <div className="rounded-2xl border border-amber-900/40 bg-amber-950/10 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-amber-300">Host privileges</p>
+                        <p className="mt-1 text-[10px] text-zinc-500">
+                          Rename room, change password, or delete it for everyone.
+                        </p>
+                      </div>
+                      <button
+                        className="rounded-full border border-zinc-800 p-2 text-zinc-400 transition-colors hover:text-white"
+                        onClick={() => setRoomEditing((value) => !value)}
+                        type="button"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
+
+                    {roomEditing ? (
+                      <div className="space-y-3">
+                        <input
+                          className="w-full rounded-xl border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-zinc-500"
+                          maxLength={80}
+                          onChange={(event) => setRoomName(event.target.value)}
+                          placeholder="Room name"
+                          value={roomName}
+                        />
+                        <textarea
+                          className="h-20 w-full resize-none rounded-xl border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-zinc-500"
+                          maxLength={240}
+                          onChange={(event) => setRoomDescription(event.target.value)}
+                          placeholder="Room description"
+                          value={roomDescription}
+                        />
+                        <input
+                          className="w-full rounded-xl border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-zinc-500"
+                          onChange={(event) => setRoomPassword(event.target.value)}
+                          placeholder="New password, blank keeps old one"
+                          type="password"
+                          value={roomPassword}
+                        />
+                        <button
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-2 text-xs font-bold text-black transition-colors hover:bg-zinc-200 disabled:opacity-50"
+                          disabled={roomActionLoading}
+                          onClick={handleRoomUpdate}
+                          type="button"
+                        >
+                          <Save size={14} />
+                          Save changes
+                        </button>
+                      </div>
+                    ) : null}
+                    <button
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-900/60 py-2 text-xs font-bold text-red-300 transition-colors hover:bg-red-950 disabled:opacity-50"
+                      disabled={roomActionLoading}
+                      onClick={handleDeleteRoom}
+                      type="button"
+                    >
+                      <Trash2 size={14} />
+                      Delete room for everyone
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-black/50 py-3 text-xs font-bold text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+                    disabled={roomActionLoading}
+                    onClick={handleLeaveRoom}
+                    type="button"
+                  >
+                    <DoorOpen size={14} />
+                    Leave room permanently
+                  </button>
+                )}
               </div>
             ))}
 
@@ -1133,6 +1394,17 @@ export function EditorRoomPage() {
                             </p>
                           </div>
                           <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-zinc-700"}`} />
+                          {isHost && participant.role !== "host" && String(participant.id) !== currentUserId ? (
+                            <button
+                              className="rounded-full border border-red-900/60 p-2 text-red-300 transition-colors hover:bg-red-950 disabled:opacity-50"
+                              disabled={roomActionLoading}
+                              onClick={() => handleRemoveMember(participant)}
+                              title="Remove member"
+                              type="button"
+                            >
+                              <UserMinus size={13} />
+                            </button>
+                          ) : null}
                         </div>
                       );
                     })

@@ -8,6 +8,8 @@ import { setCurrentRoom, setLoading, setError } from "../roomsSlice.js";
 const CreateLobby = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -38,7 +40,13 @@ const CreateLobby = () => {
     setIsLoading(true);
     try {
       dispatch(setLoading(true));
-      const result = await RoomService.createRoom({ roomCode, password, members: [] });
+      const result = await RoomService.createRoom({
+        roomCode,
+        password,
+        members: [],
+        name,
+        description,
+      });
       dispatch(setCurrentRoom(result.room));
       navigate(`/app/rooms/${result.room.roomCode}`, {
         state: {
@@ -102,6 +110,34 @@ const CreateLobby = () => {
             {/* --- MAIN CREATE CARD --- */}
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-[32px] p-8 backdrop-blur-md hover:border-zinc-600 transition-all shadow-2xl">
               <div className="space-y-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-1 flex items-center gap-2">
+                    <Hash size={12} /> Room Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Interview prep, DSA sprint..."
+                    maxLength={80}
+                    className="w-full bg-black border border-zinc-700 rounded-2xl px-4 py-4 text-sm outline-none focus:border-white transition-all placeholder:text-zinc-700"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Optional room notes"
+                    maxLength={240}
+                    rows={3}
+                    className="w-full resize-none bg-black border border-zinc-700 rounded-2xl px-4 py-3 text-sm outline-none focus:border-white transition-all placeholder:text-zinc-700"
+                  />
+                </div>
+
                 
                 {/* Room Code Input Group */}
                 <div className="space-y-3">

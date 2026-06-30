@@ -1,12 +1,15 @@
 import {
   ArrowRight,
   DoorOpen,
+  Pencil,
   History,
   LogOut,
   Plus,
   RefreshCw,
   Save,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -39,6 +42,11 @@ export function RoomLobbyPage() {
   const [profileEditing, setProfileEditing] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
   const [profileName, setProfileName] = useState(user?.name || "");
+  const [editingRoom, setEditingRoom] = useState(null);
+  const [roomName, setRoomName] = useState("");
+  const [roomDescription, setRoomDescription] = useState("");
+  const [roomPassword, setRoomPassword] = useState("");
+  const [roomActionCode, setRoomActionCode] = useState("");
   const inviteHandledRef = useRef("");
 
   // --- LOGIC (KEPT EXACTLY THE SAME) ---
@@ -82,6 +90,72 @@ export function RoomLobbyPage() {
     navigate(`/app/rooms/${room.roomCode}`);
   };
 
+  const refreshHistoryAfterAction = async (message) => {
+    await loadHistory();
+    setLocalMessage(message);
+  };
+
+  const handleStartRoomEdit = (room) => {
+    setEditingRoom(room);
+    setRoomName(room.name || "");
+    setRoomDescription(room.description || "");
+    setRoomPassword("");
+  };
+
+  const handleRoomUpdate = async () => {
+    if (!editingRoom) return;
+
+    try {
+      setRoomActionCode(editingRoom.roomCode);
+      const payload = {
+        name: roomName,
+        description: roomDescription,
+      };
+
+      if (roomPassword) {
+        payload.password = roomPassword;
+      }
+
+      const result = await RoomService.updateRoom(editingRoom.roomCode, payload);
+      dispatch(setCurrentRoom(result.room));
+      setEditingRoom(null);
+      setRoomPassword("");
+      await refreshHistoryAfterAction("Room details updated");
+    } catch (err) {
+      dispatch(setError(err.response?.data?.message || err.message || "Failed to update room"));
+    } finally {
+      setRoomActionCode("");
+    }
+  };
+
+  const handleDeleteRoom = async (room) => {
+    if (!window.confirm(`Delete room ${room.roomCode}? This removes it for everyone.`)) return;
+
+    try {
+      setRoomActionCode(room.roomCode);
+      await RoomService.deleteRoom(room.roomCode);
+      await refreshHistoryAfterAction("Room deleted");
+    } catch (err) {
+      dispatch(setError(err.response?.data?.message || err.message || "Failed to delete room"));
+    } finally {
+      setRoomActionCode("");
+    }
+  };
+
+  const handleLeaveRoom = async (room) => {
+    if (!window.confirm(`Leave room ${room.roomCode} permanently?`)) return;
+
+    try {
+      setRoomActionCode(room.roomCode);
+      await RoomService.leaveRoom(room.roomCode);
+      await refreshHistoryAfterAction("Room left");
+    } catch (err) {
+      dispatch(setError(err.response?.data?.message || err.message || "Failed to leave room"));
+    } finally {
+      setRoomActionCode("");
+    }
+  };
+
   const handleProfileSave = async () => {
     try {
       setSavingProfile(true);
@@ -115,22 +189,58 @@ export function RoomLobbyPage() {
         ) : (
           list.map((room) => (
             <div key={room.id || room.roomCode} className="group rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 hover:border-zinc-600 transition-all">
-              <div className="flex items-center justify-between">
-                <div className="cursor-pointer" onClick={() => handleOpenRoom(room)}>
-                  <span className="block font-mono text-sm font-bold text-zinc-100 group-hover:text-white transition-colors">{room.roomCode}</span>
-                  <span className="hidden">
-                    {room.status} • {room.memberCount} users • {formatDate(room.updatedAt)}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 cursor-pointer" onClick={() => handleOpenRoom(room)}>
+                  <span className="block truncate text-sm font-bold text-zinc-100 group-hover:text-white transition-colors">
+                    {room.name || "Untitled Room"}
                   </span>
+                  <span className="mt-1 block font-mono text-[11px] text-zinc-500">{room.roomCode}</span>
                   <span className="mt-1 block text-[10px] text-zinc-500">
                     {room.status === "open" ? "Active" : "Inactive"} - {room.memberCount} users - {formatDate(room.updatedAt)}
                   </span>
                 </div>
-                <button
-                  onClick={() => handleOpenRoom(room)}
-                  className="h-8 w-8 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-white hover:text-black transition-all"
-                >
-                  <ArrowRight size={14} />
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {room.isHost ? (
+                    <>
+                      <button
+                        onClick={() => handleStartRoomEdit(room)}
+                        className="h-8 w-8 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all disabled:opacity-50"
+                        disabled={roomActionCode === room.roomCode}
+                        type="button"
+                        title="Edit room"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRoom(room)}
+                        className="h-8 w-8 rounded-full border border-red-900/60 flex items-center justify-center text-red-300 hover:bg-red-950 transition-all disabled:opacity-50"
+                        disabled={roomActionCode === room.roomCode}
+                        type="button"
+                        title="Delete room"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => handleLeaveRoom(room)}
+                      className="h-8 w-8 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all disabled:opacity-50"
+                      disabled={roomActionCode === room.roomCode}
+                      type="button"
+                      title="Leave room"
+                    >
+                      <DoorOpen size={13} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleOpenRoom(room)}
+                    className="h-8 w-8 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-white hover:text-black transition-all"
+                    type="button"
+                    title="Open room"
+                  >
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -150,6 +260,75 @@ export function RoomLobbyPage() {
       }}
     >
       <div className="min-h-screen w-full bg-black/80 backdrop-blur-sm">
+        {editingRoom ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                    Host Controls
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold tracking-tight">Edit room</h2>
+                  <p className="mt-1 font-mono text-xs text-zinc-500">{editingRoom.roomCode}</p>
+                </div>
+                <button
+                  className="rounded-full border border-zinc-800 p-2 text-zinc-500 transition-colors hover:text-white"
+                  onClick={() => setEditingRoom(null)}
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-widest text-zinc-600">
+                    Room Name
+                  </label>
+                  <input
+                    className="w-full rounded-2xl border border-zinc-800 bg-black px-4 py-3 text-sm outline-none transition-colors focus:border-zinc-500"
+                    maxLength={80}
+                    onChange={(event) => setRoomName(event.target.value)}
+                    value={roomName}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-widest text-zinc-600">
+                    Description
+                  </label>
+                  <textarea
+                    className="h-24 w-full resize-none rounded-2xl border border-zinc-800 bg-black px-4 py-3 text-sm outline-none transition-colors focus:border-zinc-500"
+                    maxLength={240}
+                    onChange={(event) => setRoomDescription(event.target.value)}
+                    value={roomDescription}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-widest text-zinc-600">
+                    New Password
+                  </label>
+                  <input
+                    className="w-full rounded-2xl border border-zinc-800 bg-black px-4 py-3 text-sm outline-none transition-colors focus:border-zinc-500"
+                    onChange={(event) => setRoomPassword(event.target.value)}
+                    placeholder="Leave blank to keep current password"
+                    type="password"
+                    value={roomPassword}
+                  />
+                </div>
+              </div>
+
+              <button
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-black transition-all hover:bg-zinc-200 disabled:opacity-50"
+                disabled={roomActionCode === editingRoom.roomCode}
+                onClick={handleRoomUpdate}
+                type="button"
+              >
+                <Save size={16} />
+                Save room changes
+              </button>
+            </div>
+          </div>
+        ) : null}
         
         {/* --- NAVBAR --- */}
         <nav className="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto w-full">
