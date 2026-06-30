@@ -29,7 +29,7 @@ class AuthController {
 
       AuthCookieUtil.setAuthCookies(res, result);
 
-      return res.redirect(`${EnvConfig.get("FRONTEND_URL")}/auth/success`);
+      return res.redirect(`${EnvConfig.get("FRONTEND_URL")}/app`);
     } catch (error) {
       next(error);
     }
