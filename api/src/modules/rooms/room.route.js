@@ -41,6 +41,11 @@ class RoomRoute {
       AuthMiddleware.handle,
       this.controller.history.bind(this.controller),
     );
+    this.router.get(
+      "/code",
+      AuthMiddleware.handle,
+      this.controller.generateCode.bind(this.controller),
+    );
     this.router.patch(
       "/:roomCode/close",
       AuthMiddleware.handle,

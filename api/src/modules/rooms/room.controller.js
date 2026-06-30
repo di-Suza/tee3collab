@@ -118,6 +118,24 @@ class RoomController {
       next(error);
     }
   }
+
+  async generateCode(req, res, next) {
+    try {
+      const user = req.user;
+      if (!user || !user.id) {
+        throw new AppError("Unauthorized", 401);
+      }
+
+      const roomCode = await this.roomService.generateAvailableRoomCode();
+
+      return res.json({
+        success: true,
+        data: { roomCode },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export { RoomController };

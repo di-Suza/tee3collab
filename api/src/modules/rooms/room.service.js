@@ -110,6 +110,10 @@ class RoomService {
     );
   }
 
+  async generateAvailableRoomCode() {
+    return this.resolveRoomCode();
+  }
+
   async closeRoom({ roomCode, userId } = {}) {
     if (!roomCode) {
       throw new AppError("roomCode is required", 400);

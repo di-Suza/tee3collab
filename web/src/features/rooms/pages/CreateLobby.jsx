@@ -1,32 +1,40 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Zap, RefreshCw, Lock, Hash, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import RoomService from "../services/room.service.js";
 import { setCurrentRoom, setLoading, setError } from "../roomsSlice.js";
 
-// The logic provided in your snippet
-const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-function generateRoomCode() {
-  let code = "";
-  for (let index = 0; index < 6; index += 1) {
-    code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
-  }
-  return code;
-}
-
 const CreateLobby = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const [roomCode, setRoomCode] = useState(generateRoomCode());
+  const [roomCode, setRoomCode] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCodeLoading, setIsCodeLoading] = useState(false);
 
-  const handleGenerate = () => {
-    setRoomCode(generateRoomCode());
-  };
+  const fetchUniqueRoomCode = useCallback(async () => {
+    try {
+      setIsCodeLoading(true);
+      const result = await RoomService.getUniqueRoomCode();
+      setRoomCode(result.roomCode);
+    } catch (error) {
+      dispatch(setError(error.response?.data?.message || error.message || "Failed to generate room code"));
+    } finally {
+      setIsCodeLoading(false);
+    }
+  }, [dispatch]);
+
+  useEffect(() => {
+    fetchUniqueRoomCode();
+  }, [fetchUniqueRoomCode]);
 
   const handleCreate = async () => {
+    if (!roomCode) {
+      dispatch(setError("Room code is still generating"));
+      return;
+    }
+
     setIsLoading(true);
     try {
       dispatch(setLoading(true));
@@ -43,6 +51,9 @@ const CreateLobby = () => {
       });
     } catch (error) {
       dispatch(setError(error.response?.data?.message || error.message || "Failed to create room"));
+      if (error.response?.status === 409) {
+        await fetchUniqueRoomCode();
+      }
     } finally {
       setIsLoading(false);
       dispatch(setLoading(false));
@@ -99,19 +110,23 @@ const CreateLobby = () => {
                       <Hash size={12} /> Room Code
                     </label>
                     <button 
-                      onClick={handleGenerate}
-                      className="text-zinc-500 hover:text-white transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-tighter"
+                      onClick={fetchUniqueRoomCode}
+                      disabled={isCodeLoading || isLoading}
+                      className="text-zinc-500 hover:text-white transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-tighter disabled:cursor-not-allowed disabled:opacity-50"
+                      type="button"
                     >
-                      <RefreshCw size={10} /> Regenerate
+                      <RefreshCw size={10} className={isCodeLoading ? "animate-spin" : ""} />
+                      {isCodeLoading ? "Generating" : "Regenerate"}
                     </button>
                   </div>
                   <div className="relative">
                     <input 
                       type="text"
                       value={roomCode}
-                      onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                      placeholder="Generating..."
+                      readOnly
                       maxLength={6}
-                      className="w-full bg-black border border-zinc-700 rounded-2xl px-4 py-4 font-mono text-lg text-center tracking-[0.5em] outline-none focus:border-white transition-all shadow-inner"
+                      className="w-full cursor-default bg-black border border-zinc-700 rounded-2xl px-4 py-4 font-mono text-lg text-center tracking-[0.5em] outline-none focus:border-white transition-all shadow-inner"
                     />
                   </div>
                 </div>
@@ -126,7 +141,7 @@ const CreateLobby = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Optional secure password"
+                      placeholder="Minimum 4 characters"
                       className="w-full bg-black border border-zinc-700 rounded-2xl px-4 py-4 text-sm outline-none focus:border-white transition-all placeholder:text-zinc-700"
                     />
                   </div>
@@ -135,7 +150,7 @@ const CreateLobby = () => {
                 {/* Create Button */}
                 <button 
                   onClick={handleCreate}
-                  disabled={isLoading}
+                  disabled={isLoading || isCodeLoading || !roomCode}
                   className="w-full bg-white text-black py-4 rounded-2xl font-bold hover:bg-zinc-200 transition-all transform active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-white/5 disabled:opacity-50"
                 >
                   {isLoading ? (
