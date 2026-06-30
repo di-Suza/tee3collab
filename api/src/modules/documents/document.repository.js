@@ -32,13 +32,35 @@ class DocumentRepository {
   }
 
   async createForRoom(room) {
-    return DocumentModel.create({
-      roomId: room._id,
-      roomCode: room.roomCode,
-      content: "",
-      version: 0,
-      patchHistory: [],
-    });
+    try {
+      return await DocumentModel.findOneAndUpdate(
+        { roomCode: room.roomCode },
+        {
+          $setOnInsert: {
+            roomId: room._id,
+            roomCode: room.roomCode,
+            content: "",
+            version: 0,
+            patchHistory: [],
+            lineAuthors: [],
+            conflictMarkers: [],
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+          setDefaultsOnInsert: true,
+        },
+      );
+    } catch (error) {
+      if (error?.code === 11000) {
+        return DocumentModel.findOne({
+          $or: [{ roomCode: room.roomCode }, { roomId: room._id }],
+        });
+      }
+
+      throw error;
+    }
   }
 
   async findOrCreateByRoomCode(roomCode) {
