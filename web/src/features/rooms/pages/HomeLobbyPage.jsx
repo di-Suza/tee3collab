@@ -1,18 +1,12 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const HomeLobbyPage = () => {
+  const navigate = useNavigate();
   const [roomID, setRoomID] = useState("");
 
-  const handleCreateRoom = () => {
-    // Logic to call your backend /api/v1/rooms/create
-    console.log("Creating room...");
-    // window.location.href = `/editor/${generatedId}`;
-  };
-
   const handleJoinRoom = () => {
-    if (!roomID) return alert("Please enter a Room ID");
-    console.log("Joining room:", roomID);
-    // window.location.href = `/editor/${roomID}`;
+    navigate("/app/join-lobby");
   };
 
   return (
@@ -73,7 +67,7 @@ const HomeLobbyPage = () => {
                 </p>
               </div>
               <button 
-                onClick={handleCreateRoom}
+                onClick={() => navigate("/app/create-lobby")}
                 className="w-full bg-white text-black py-4 rounded-2xl font-bold hover:bg-zinc-200 transition-all transform active:scale-95"
               >
                 Create Room
@@ -81,18 +75,25 @@ const HomeLobbyPage = () => {
             </div>
 
             {/* Card 2: Join Room */}
-            <div className="bg-zinc-900/50 border border-zinc-800 p-8 rounded-3xl backdrop-blur-md hover:border-zinc-600 transition-all group flex flex-col justify-between">
+            <div className="bg-zinc-900/50 border border-zinc-800 p-8 rounded-3xl backdrop-blur-md hover:border-zinc-600 transition-all group text-center flex flex-col justify-between">
               <div>
                 <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
                   <span className="text-3xl">🔑</span>
                 </div>
-                <h2 className="text-2xl font-semibold mb-3 text-center">Enter a Session</h2>
-                <p className="text-zinc-500 text-sm mb-8 text-center">
-                  Have a room ID? Paste it below to enter the workspace.
+                <h2 className="text-2xl font-semibold mb-3">Enter a Session</h2>
+                <p className="text-zinc-500 text-sm mb-8">
+                  Have a room ID and password? Continue to the secure join screen.
                 </p>
               </div>
 
-              <div className="space-y-4">
+              <button 
+                onClick={() => navigate("/app/join-lobby")}
+                className="w-full bg-zinc-100 text-black py-4 rounded-2xl font-bold hover:bg-white transition-all transform active:scale-95"
+              >
+                Join Room
+              </button>
+
+              <div className="hidden">
                 {/* Command Palette Style Input */}
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">
