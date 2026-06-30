@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import AuthService from "../services/auth.service.js";
 import { setUser, setLoading, setError } from "../authSlice.js";
+import { tokenStorage } from "../../../shared/utils/token-storage.js";
 
 export function GoogleAuthPage() {
   const { roomCode } = useParams();
@@ -12,6 +13,13 @@ export function GoogleAuthPage() {
 
   useEffect(() => {
     if (window.location.pathname.includes("/auth/success")) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const accessToken = searchParams.get("accessToken");
+      const refreshToken = searchParams.get("refreshToken");
+      
+      if (accessToken) {
+        tokenStorage.set(accessToken, refreshToken);
+      }
       (async () => {
         try {
           dispatch(setLoading(true));

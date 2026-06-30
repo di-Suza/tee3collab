@@ -1,5 +1,6 @@
 import { env } from "../../../shared/utils/env.js";
 import { httpClient } from "../../../shared/api/http-client.js";
+import { tokenStorage } from "../../../shared/utils/token-storage.js";
 
 const PENDING_JOIN_ROOM_KEY = "coderoom.pendingJoinRoomCode";
 
@@ -16,6 +17,7 @@ export class AuthService {
 
   static async logout() {
     await httpClient.post("/auth/logout");
+    tokenStorage.clear();
   }
 
   static googleAuthUrl() {
