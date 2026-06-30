@@ -171,7 +171,7 @@ export function EditorRoomPage() {
 
   return (
     <div 
-      className="min-h-screen w-full text-white font-sans selection:bg-zinc-700"
+      className="h-screen w-full overflow-hidden text-white font-sans selection:bg-zinc-700"
       style={{
         backgroundImage: "url('https://i.pinimg.com/736x/0c/5a/99/0c5a990ae7e9489192d6f7abf916ae19.jpg')",
         backgroundSize: "cover",
@@ -179,7 +179,7 @@ export function EditorRoomPage() {
         backgroundRepeat: "no-repeat",
       }}
     >
-      <div className="min-h-screen w-full bg-black/90 backdrop-blur-md">
+      <div className="flex h-screen w-full flex-col overflow-hidden bg-black/90 backdrop-blur-md">
         {showInviteModal && createdRoomInvite ? (
           createPortal(
           <div className="fixed left-0 top-0 z-[9999] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/80 p-4 backdrop-blur-sm">
@@ -258,7 +258,7 @@ export function EditorRoomPage() {
         ) : null}
         
         {/* --- TOP NAV --- */}
-        <nav className="flex items-center justify-between px-8 py-4 border-b border-zinc-800">
+        <nav className="flex shrink-0 items-center justify-between px-8 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate("/app")} 
@@ -293,14 +293,14 @@ export function EditorRoomPage() {
         </nav>
 
         {/* --- MAIN CONTENT AREA --- */}
-        <main className="max-w-[1600px] mx-auto p-6 grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+        <main className="mx-auto grid min-h-0 w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[minmax(0,1fr)_350px]">
           
           {/* LEFT: THE EDITOR WINDOW */}
-          <div className="flex flex-col min-h-[calc(100vh-140px)]">
-            <div className="relative flex-1 bg-zinc-900/40 border border-zinc-800 rounded-2xl overflow-hidden backdrop-blur-md shadow-2xl">
+          <div className="flex min-h-0 flex-col">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 shadow-2xl backdrop-blur-md">
               
               {/* Window Controls Top Bar */}
-              <div className="flex items-center justify-between px-4 py-3 bg-black/50 border-b border-zinc-800">
+              <div className="flex shrink-0 items-center justify-between px-4 py-3 bg-black/50 border-b border-zinc-800">
                 <div className="flex gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
                   <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
@@ -314,7 +314,7 @@ export function EditorRoomPage() {
 
               {/* Notification Bar */}
               {(error || conflict || typingUser) && (
-                <div className="flex items-center justify-between px-4 py-2 text-xs font-medium border-b border-zinc-800 bg-black/40">
+                <div className="flex shrink-0 items-center justify-between px-4 py-2 text-xs font-medium border-b border-zinc-800 bg-black/40">
                   {error && <span className="text-red-400 flex items-center gap-2">⚠️ {error}</span>}
                   {conflict && <span className="text-amber-400 flex items-center gap-2">⚡ {conflict.reason}</span>}
                   {typingUser && !error && !conflict && (
@@ -326,7 +326,7 @@ export function EditorRoomPage() {
               )}
 
               {/* The Monaco Editor */}
-              <div className="h-full">
+              <div className="min-h-0 flex-1">
                 <Editor
                   height="100%"
                   language="javascript"
@@ -350,7 +350,7 @@ export function EditorRoomPage() {
           </div>
 
           {/* RIGHT: INFORMATION PANEL */}
-          <aside className="space-y-6">
+          <aside className="min-h-0 space-y-6 overflow-y-auto pr-1">
             
             {/* Room Identity Card */}
             <div className="bg-zinc-900/40 border border-zinc-800 p-6 rounded-3xl backdrop-blur-md hover:border-zinc-600 transition-all">
