@@ -1,11 +1,16 @@
 export const tokenStorage = {
   get() {
-    return null;
+    return window.localStorage.getItem("coderoom.accessToken");
   },
-  set() {
-    return undefined;
+  getRefreshToken() {
+    return window.localStorage.getItem("coderoom.refreshToken");
+  },
+  set(accessToken, refreshToken) {
+    if (accessToken) window.localStorage.setItem("coderoom.accessToken", accessToken);
+    if (refreshToken) window.localStorage.setItem("coderoom.refreshToken", refreshToken);
   },
   clear() {
-    return undefined;
+    window.localStorage.removeItem("coderoom.accessToken");
+    window.localStorage.removeItem("coderoom.refreshToken");
   },
 };
