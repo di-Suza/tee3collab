@@ -5,7 +5,6 @@ import { GoogleAuthPage } from "../../features/auth/pages/GoogleAuthPage.jsx";
 import { EditorRoomPage } from "../../features/editor/pages/EditorRoomPage.jsx";
 import { RoomLobbyPage } from "../../features/rooms/pages/RoomLobbyPage.jsx";
 import HomePage from "../../features/auth/pages/HomePage.jsx";
-import HomeLobbyPage from "../../features/rooms/pages/HomeLobbyPage.jsx";
 import JoinLobby from "../../features/rooms/pages/JoinLobby.jsx";
 import CreateLobby from "../../features/rooms/pages/CreateLobby.jsx";
 
@@ -24,8 +23,7 @@ export const router = createBrowserRouter([
     path: "/app",
     element: <PrivateLayout />,
     children: [
-      {index: true, element: <HomeLobbyPage/>},
-      { path: "dashboard", element: <RoomLobbyPage/>},
+      { index: true, element: <RoomLobbyPage /> },
       { path: "rooms/:roomCode", element: <EditorRoomPage /> },
       { path: "create-lobby", element: <CreateLobby /> },
       { path: "join-lobby", element: <JoinLobby /> },
