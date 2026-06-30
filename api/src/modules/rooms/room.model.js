@@ -2,6 +2,20 @@ import mongoose from "mongoose";
 
 const roomSchema = new mongoose.Schema(
   {
+    name: {
+      type: String,
+      trim: true,
+      default: "Untitled Room",
+      maxlength: 80,
+    },
+
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 240,
+    },
+
     roomCode: {
       type: String,
       required: true,

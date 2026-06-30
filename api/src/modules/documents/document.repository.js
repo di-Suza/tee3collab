@@ -59,6 +59,10 @@ class DocumentRepository {
 
     return document.save();
   }
+
+  async deleteByRoomCode(roomCode) {
+    return DocumentModel.deleteOne({ roomCode: String(roomCode).toUpperCase() });
+  }
 }
 
 export { DocumentRepository };
