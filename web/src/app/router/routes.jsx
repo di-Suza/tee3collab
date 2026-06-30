@@ -7,6 +7,7 @@ import { RoomLobbyPage } from "../../features/rooms/pages/RoomLobbyPage.jsx";
 import HomePage from "../../features/auth/pages/HomePage.jsx";
 import HomeLobbyPage from "../../features/rooms/pages/HomeLobbyPage.jsx";
 import JoinLobby from "../../features/rooms/pages/JoinLobby.jsx";
+import CreateLobby from "../../features/rooms/pages/CreateLobby.jsx";
 
 export const router = createBrowserRouter([
   {
@@ -24,7 +25,7 @@ export const router = createBrowserRouter([
     element: <PrivateLayout />,
     children: [
       // {index: true, element: <HomeLobbyPage/>},
-      { index: true, element: <RoomLobbyPage /> },
+      { index: true, element: <CreateLobby/>},
       { path: "rooms/:roomCode", element: <EditorRoomPage /> },
     ],
   },
