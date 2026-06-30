@@ -52,7 +52,7 @@ class DocumentSocketHandler {
         },
       };
 
-      this.io.to(normalizedRoomCode).emit(SOCKET_EVENTS.DOCUMENT_PATCH_APPLIED, payload);
+      this.socket.to(normalizedRoomCode).emit(SOCKET_EVENTS.DOCUMENT_PATCH_APPLIED, payload);
 
       if (typeof acknowledge === "function") {
         acknowledge({ ok: true, data: payload });

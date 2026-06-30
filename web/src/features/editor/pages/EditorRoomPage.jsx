@@ -44,6 +44,66 @@ function hashColorIndex(value = "") {
   return hash;
 }
 
+function actorName(actor = {}) {
+  return actor.isSelf ? "You" : actor.name || "Someone";
+}
+
+function changedLinesForPatch(content = "", patch = {}) {
+  const safePosition = Math.min(Math.max(patch.position || 0, 0), content.length);
+  const deleteEnd = Math.min(safePosition + (patch.deleteCount || 0), content.length);
+  const deletedText = content.slice(safePosition, deleteEnd);
+  const startLine = lineFromOffset(content, safePosition);
+  const lineCount = Math.max(
+    1,
+    deletedText.split("\n").length,
+    String(patch.insertText || "").split("\n").length,
+  );
+
+  return Array.from({ length: lineCount }, (_, index) => startLine + index);
+}
+
+function transformOffsetAgainstPatch(offset, patch = {}) {
+  const start = patch.position || 0;
+  const deleteCount = patch.deleteCount || 0;
+  const insertLength = String(patch.insertText || "").length;
+  const end = start + deleteCount;
+
+  if (offset < start) {
+    return offset;
+  }
+
+  if (offset <= end) {
+    return start + insertLength;
+  }
+
+  return offset - deleteCount + insertLength;
+}
+
+function transformPatchAgainstPatch(patch, acceptedPatch = {}) {
+  let nextPosition = patch.position || 0;
+  const acceptedPosition = acceptedPatch.position || 0;
+  const acceptedDeleteCount = acceptedPatch.deleteCount || 0;
+  const acceptedInsertLength = String(acceptedPatch.insertText || "").length;
+  const acceptedDeleteEnd = acceptedPosition + acceptedDeleteCount;
+
+  if (acceptedDeleteCount > 0 && nextPosition > acceptedPosition) {
+    if (nextPosition <= acceptedDeleteEnd) {
+      nextPosition = acceptedPosition;
+    } else {
+      nextPosition -= acceptedDeleteCount;
+    }
+  }
+
+  if (acceptedInsertLength > 0 && acceptedPosition <= nextPosition) {
+    nextPosition += acceptedInsertLength;
+  }
+
+  return {
+    ...patch,
+    position: Math.max(0, nextPosition),
+  };
+}
+
 export function EditorRoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
@@ -55,7 +115,6 @@ export function EditorRoomPage() {
 
   const [content, setContent] = useState("");
   const [version, setVersion] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
   const [typingUser, setTypingUser] = useState(null);
@@ -70,14 +129,19 @@ export function EditorRoomPage() {
   const monacoRef = useRef(null);
   const clientIdRef = useRef("");
   const contentRef = useRef("");
+  const syncedContentRef = useRef("");
   const versionRef = useRef(0);
+  const loadingRef = useRef(true);
   const applyingRemoteRef = useRef(false);
+  const sendingPatchRef = useRef(false);
+  const flushQueuedRef = useRef(false);
   const typingTimerRef = useRef(null);
   const remoteTypingTimerRef = useRef(null);
+  const conflictClearTimerRef = useRef(null);
   const decorationIdsRef = useRef([]);
   const lineAuthorsRef = useRef(new Map());
   const typingIndicatorsRef = useRef(new Map());
-  const conflictMarkersRef = useRef([]);
+  const conflictMarkersRef = useRef(new Map());
 
   const refreshEditorDecorations = useCallback(() => {
     const editor = editorRef.current;
@@ -94,12 +158,25 @@ export function EditorRoomPage() {
     for (const [lineNumber, actor] of lineAuthorsRef.current.entries()) {
       const safeLine = Math.min(Math.max(Number(lineNumber), 1), lineCount);
       const colorIndex = hashColorIndex(actor?.id || actor?.name || "");
+      const maxColumn = model.getLineMaxColumn(safeLine);
+      const label = actorName(actor);
 
       decorations.push({
         range: new monaco.Range(safeLine, 1, safeLine, 1),
         options: {
           isWholeLine: true,
           className: `coderoom-line-author ${USER_COLOR_CLASSES[colorIndex]}`,
+          hoverMessage: { value: `Last edited by ${label}` },
+        },
+      });
+
+      decorations.push({
+        range: new monaco.Range(safeLine, maxColumn, safeLine, maxColumn),
+        options: {
+          after: {
+            content: `  ${label}`,
+            inlineClassName: `coderoom-author-label coderoom-user-text-${colorIndex}`,
+          },
         },
       });
     }
@@ -107,21 +184,28 @@ export function EditorRoomPage() {
     for (const indicator of typingIndicatorsRef.current.values()) {
       const safeLine = Math.min(Math.max(Number(indicator.lineNumber || 1), 1), lineCount);
       const colorIndex = hashColorIndex(indicator.actor?.id || indicator.actor?.name || "");
+      const maxColumn = model.getLineMaxColumn(safeLine);
 
       decorations.push({
         range: new monaco.Range(safeLine, 1, safeLine, 1),
         options: {
           isWholeLine: true,
           className: `coderoom-typing-line ${USER_COLOR_CLASSES[colorIndex]}`,
+        },
+      });
+
+      decorations.push({
+        range: new monaco.Range(safeLine, maxColumn, safeLine, maxColumn),
+        options: {
           after: {
-            content: ` ${indicator.actor?.name || "Someone"} is typing`,
+            content: `  ${actorName(indicator.actor)} typing`,
             inlineClassName: `coderoom-typing-label coderoom-user-text-${colorIndex}`,
           },
         },
       });
     }
 
-    for (const marker of conflictMarkersRef.current) {
+    for (const marker of conflictMarkersRef.current.values()) {
       const safeLine = Math.min(Math.max(Number(marker.lineNumber || 1), 1), lineCount);
 
       decorations.push({
@@ -135,6 +219,76 @@ export function EditorRoomPage() {
     }
 
     decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, decorations);
+  }, []);
+
+  const recordLineAuthor = useCallback((baseContent, patch, actor) => {
+    for (const lineNumber of changedLinesForPatch(baseContent, patch)) {
+      lineAuthorsRef.current.set(lineNumber, actor);
+    }
+  }, []);
+
+  const showConflictMarker = useCallback((lineNumber, conflictPayload, actor) => {
+    if (!conflictPayload) {
+      return;
+    }
+
+    const safeLine = Math.max(Number(lineNumber || 1), 1);
+    const message = `${actorName(actor)} edit was rebased here. ${conflictPayload.reason}`;
+
+    conflictMarkersRef.current.set(safeLine, {
+      lineNumber: safeLine,
+      message,
+    });
+
+    setConflict({
+      ...conflictPayload,
+      reason: message,
+    });
+
+    window.clearTimeout(conflictClearTimerRef.current);
+    conflictClearTimerRef.current = window.setTimeout(() => {
+      setConflict(null);
+    }, 3500);
+  }, []);
+
+  const replaceEditorContent = useCallback((nextContent, cursorPatch = null) => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    const model = editor?.getModel();
+
+    if (!editor || !monaco || !model) {
+      contentRef.current = nextContent;
+      return;
+    }
+
+    if (model.getValue() === nextContent) {
+      contentRef.current = nextContent;
+      return;
+    }
+
+    const focused = editor.hasTextFocus();
+    const position = editor.getPosition();
+    const cursorOffset = position ? model.getOffsetAt(position) : null;
+    const fullRange = model.getFullModelRange();
+
+    editor.executeEdits("remote-rebase", [
+      {
+        range: fullRange,
+        text: nextContent,
+        forceMoveMarkers: true,
+      },
+    ]);
+
+    if (focused && cursorOffset !== null) {
+      const nextOffset = cursorPatch
+        ? transformOffsetAgainstPatch(cursorOffset, cursorPatch)
+        : cursorOffset;
+      const safeOffset = Math.min(Math.max(nextOffset, 0), model.getValueLength());
+
+      editor.setPosition(model.getPositionAt(safeOffset));
+    }
+
+    contentRef.current = model.getValue();
   }, []);
 
   const applyPatchToEditor = useCallback((patch) => {
@@ -151,6 +305,9 @@ export function EditorRoomPage() {
     const deleteEnd = Math.min(safePosition + patch.deleteCount, model.getValueLength());
     const start = model.getPositionAt(safePosition);
     const end = model.getPositionAt(deleteEnd);
+    const focused = editor.hasTextFocus();
+    const cursorPosition = editor.getPosition();
+    const cursorOffset = cursorPosition ? model.getOffsetAt(cursorPosition) : null;
 
     editor.executeEdits("remote-sync", [
       {
@@ -159,6 +316,15 @@ export function EditorRoomPage() {
         forceMoveMarkers: true,
       },
     ]);
+
+    if (focused && cursorOffset !== null) {
+      const safeOffset = Math.min(
+        Math.max(transformOffsetAgainstPatch(cursorOffset, patch), 0),
+        model.getValueLength(),
+      );
+
+      editor.setPosition(model.getPositionAt(safeOffset));
+    }
 
     contentRef.current = model.getValue();
   }, []);
@@ -171,7 +337,16 @@ export function EditorRoomPage() {
       return;
     }
 
+    const focused = editor.hasTextFocus();
+    const position = editor.getPosition();
+    const cursorOffset = position ? model.getOffsetAt(position) : null;
+
     editor.setValue(snapshotContent);
+
+    if (focused && cursorOffset !== null) {
+      const safeOffset = Math.min(Math.max(cursorOffset, 0), model.getValueLength());
+      editor.setPosition(model.getPositionAt(safeOffset));
+    }
   }, []);
 
   const handleEditorMount = useCallback((editor, monaco) => {
@@ -189,11 +364,12 @@ export function EditorRoomPage() {
   const applySnapshot = useCallback((snapshot) => {
     applyingRemoteRef.current = true;
     contentRef.current = snapshot.content || "";
+    syncedContentRef.current = snapshot.content || "";
     versionRef.current = snapshot.version || 0;
+    loadingRef.current = false;
     setContent(snapshot.content || "");
     setVersion(snapshot.version || 0);
     applySnapshotToEditor(snapshot.content || "");
-    setLoading(false);
     window.setTimeout(() => {
       applyingRemoteRef.current = false;
     }, 0);
@@ -203,6 +379,160 @@ export function EditorRoomPage() {
     const snapshot = await DocumentService.getDocument(displayCode);
     applySnapshot(snapshot);
   }, [applySnapshot, displayCode]);
+
+  const getCurrentEditorValue = useCallback(() => {
+    return editorRef.current?.getModel()?.getValue() ?? contentRef.current;
+  }, []);
+
+  const handleOwnPatchAccepted = useCallback(
+    (payload, submittedPatch) => {
+      const acceptedPatch = payload?.patch || submittedPatch;
+      const previousServerContent = syncedContentRef.current;
+      const nextServerContent = payload?.content || applyPatchToText(previousServerContent, acceptedPatch);
+      const actor = {
+        ...(payload?.actor || {}),
+        id: clientIdRef.current,
+        name: "You",
+        isSelf: true,
+      };
+
+      versionRef.current = payload?.version ?? versionRef.current;
+      syncedContentRef.current = nextServerContent;
+      contentRef.current = getCurrentEditorValue();
+
+      setVersion(versionRef.current);
+      setLastActor("You");
+      setConflict(null);
+      window.clearTimeout(conflictClearTimerRef.current);
+      recordLineAuthor(previousServerContent, acceptedPatch, actor);
+      refreshEditorDecorations();
+    },
+    [getCurrentEditorValue, recordLineAuthor, refreshEditorDecorations],
+  );
+
+  const flushLocalChanges = useCallback(() => {
+    if (loadingRef.current || applyingRemoteRef.current) {
+      flushQueuedRef.current = true;
+      return;
+    }
+
+    if (sendingPatchRef.current) {
+      flushQueuedRef.current = true;
+      return;
+    }
+
+    const socketService = socketRef.current;
+    const currentText = getCurrentEditorValue();
+    contentRef.current = currentText;
+
+    if (!socketService || currentText === syncedContentRef.current) {
+      flushQueuedRef.current = false;
+      return;
+    }
+
+    const patch = createPatchFromChange(
+      syncedContentRef.current,
+      currentText,
+      versionRef.current,
+      clientIdRef.current,
+    );
+
+    if (!patch) {
+      flushQueuedRef.current = false;
+      return;
+    }
+
+    sendingPatchRef.current = true;
+    flushQueuedRef.current = false;
+
+    socketService.sendPatch(displayCode, patch, (ack) => {
+      sendingPatchRef.current = false;
+
+      if (!ack?.ok) {
+        setError(ack?.error?.message || "Patch was rejected by the server");
+        reloadSnapshot();
+        return;
+      }
+
+      handleOwnPatchAccepted(ack.data, patch);
+
+      window.requestAnimationFrame(() => {
+        const latestText = getCurrentEditorValue();
+
+        if (flushQueuedRef.current || latestText !== syncedContentRef.current) {
+          flushLocalChanges();
+        }
+      });
+    });
+  }, [displayCode, getCurrentEditorValue, handleOwnPatchAccepted, reloadSnapshot]);
+
+  const handleRemotePatchApplied = useCallback(
+    (payload) => {
+      const patch = payload.patch;
+
+      if (patch.clientId === clientIdRef.current) {
+        handleOwnPatchAccepted(payload, patch);
+        return;
+      }
+
+      const actor = payload.actor || { name: "Someone" };
+      const previousServerContent = syncedContentRef.current;
+      const previousVersion = versionRef.current;
+      const currentText = getCurrentEditorValue();
+      const hasLocalChanges = currentText !== previousServerContent;
+      const nextServerContent = payload.content || applyPatchToText(previousServerContent, patch);
+      const editedLine = lineFromOffset(previousServerContent, patch.position);
+
+      versionRef.current = payload.version;
+      syncedContentRef.current = nextServerContent;
+      setVersion(payload.version);
+      setLastActor(actor.name || "Someone");
+      recordLineAuthor(previousServerContent, patch, actor);
+
+      if (payload.conflict) {
+        showConflictMarker(editedLine, payload.conflict, actor);
+      }
+
+      applyingRemoteRef.current = true;
+
+      if (hasLocalChanges) {
+        const localPatch = createPatchFromChange(
+          previousServerContent,
+          currentText,
+          previousVersion,
+          clientIdRef.current,
+        );
+        const rebasedLocalPatch = localPatch ? transformPatchAgainstPatch(localPatch, patch) : null;
+        const mergedText = rebasedLocalPatch
+          ? applyPatchToText(nextServerContent, rebasedLocalPatch)
+          : nextServerContent;
+
+        replaceEditorContent(mergedText, patch);
+        flushQueuedRef.current = true;
+      } else {
+        applyPatchToEditor(patch);
+      }
+
+      refreshEditorDecorations();
+      window.setTimeout(() => {
+        applyingRemoteRef.current = false;
+
+        if (flushQueuedRef.current && !sendingPatchRef.current) {
+          flushLocalChanges();
+        }
+      }, 0);
+    },
+    [
+      applyPatchToEditor,
+      flushLocalChanges,
+      getCurrentEditorValue,
+      handleOwnPatchAccepted,
+      recordLineAuthor,
+      refreshEditorDecorations,
+      replaceEditorContent,
+      showConflictMarker,
+    ],
+  );
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -227,7 +557,7 @@ export function EditorRoomPage() {
       .catch((err) => {
         if (mounted) {
           setError(err.response?.data?.message || err.message || "Unable to load document");
-          setLoading(false);
+          loadingRef.current = false;
         }
       });
 
@@ -236,43 +566,9 @@ export function EditorRoomPage() {
       if (mounted) applySnapshot(snapshot);
     });
 
-    socketService.onPatchApplied(async (payload) => {
+    socketService.onPatchApplied((payload) => {
       if (!mounted) return;
-      const patch = payload.patch;
-      const isOwnPatch = patch.clientId === clientIdRef.current;
-      const actor = payload.actor || { name: "Someone" };
-      const editedLine = lineFromOffset(contentRef.current, patch.position);
-
-      versionRef.current = payload.version;
-      setVersion(payload.version);
-      setLastActor(actor.name || "Someone");
-      setConflict(payload.conflict || null);
-      lineAuthorsRef.current.set(editedLine, actor);
-
-      if (payload.conflict) {
-        conflictMarkersRef.current = [
-          ...conflictMarkersRef.current.slice(-7),
-          {
-            lineNumber: editedLine,
-            message: `Conflict resolved near this line. ${payload.conflict.reason}`,
-          },
-        ];
-      }
-
-      if (isOwnPatch) {
-        refreshEditorDecorations();
-        if (payload.conflict) {
-          await reloadSnapshot();
-        }
-        return;
-      }
-
-      applyingRemoteRef.current = true;
-      applyPatchToEditor(patch);
-      refreshEditorDecorations();
-      window.setTimeout(() => {
-        applyingRemoteRef.current = false;
-      }, 0);
+      handleRemotePatchApplied(payload);
     });
 
     socketService.onTyping((payload) => {
@@ -308,30 +604,43 @@ export function EditorRoomPage() {
       mounted = false;
       window.clearTimeout(typingTimerRef.current);
       window.clearTimeout(remoteTypingTimerRef.current);
+      window.clearTimeout(conflictClearTimerRef.current);
       socketService.disconnect();
     };
-  }, [applyPatchToEditor, applySnapshot, displayCode, refreshEditorDecorations, reloadSnapshot]);
+  }, [applySnapshot, displayCode, handleRemotePatchApplied, refreshEditorDecorations]);
 
   const handleEditorChange = useCallback(
     (nextValue = "") => {
-      if (applyingRemoteRef.current || loading) return;
+      if (applyingRemoteRef.current || loadingRef.current) return;
       const previousContent = contentRef.current;
       const nextContent = nextValue || "";
-      const patch = createPatchFromChange(previousContent, nextContent, versionRef.current, clientIdRef.current);
+      const localPatch = createPatchFromChange(
+        previousContent,
+        nextContent,
+        versionRef.current,
+        clientIdRef.current,
+      );
       contentRef.current = nextContent;
-      if (!patch) return;
+      if (!localPatch) return;
+
       setError("");
-      const cursorLine = editorRef.current?.getPosition()?.lineNumber || lineFromOffset(nextContent, patch.position);
-      socketRef.current?.startTyping(displayCode, { lineNumber: cursorLine });
-      socketRef.current?.sendPatch(displayCode, patch, (ack) => {
-        if (!ack?.ok) setError(ack?.error?.message || "Patch was rejected by the server");
+      setConflict(null);
+      recordLineAuthor(previousContent, localPatch, {
+        id: clientIdRef.current,
+        name: "You",
+        isSelf: true,
       });
+      refreshEditorDecorations();
+
+      const cursorLine = editorRef.current?.getPosition()?.lineNumber || lineFromOffset(nextContent, localPatch.position);
+      socketRef.current?.startTyping(displayCode, { lineNumber: cursorLine });
+      flushLocalChanges();
       window.clearTimeout(typingTimerRef.current);
       typingTimerRef.current = window.setTimeout(() => {
         socketRef.current?.stopTyping(displayCode);
       }, 800);
     },
-    [displayCode, loading],
+    [displayCode, flushLocalChanges, recordLineAuthor, refreshEditorDecorations],
   );
 
   const copyToClipboard = useCallback(async (value) => {
@@ -534,7 +843,7 @@ export function EditorRoomPage() {
                   <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
                 </div>
                 <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-                  main.js — Darkweb X Editor
+                  main.js - CodeRoom Editor
                 </div>
                 <div className="w-12"></div> {/* Spacer for balance */}
               </div>
@@ -542,8 +851,8 @@ export function EditorRoomPage() {
               {/* Notification Bar */}
               {(error || conflict || typingUser) && (
                 <div className="flex shrink-0 items-center justify-between px-4 py-2 text-xs font-medium border-b border-zinc-800 bg-black/40">
-                  {error && <span className="text-red-400 flex items-center gap-2">⚠️ {error}</span>}
-                  {conflict && <span className="text-amber-400 flex items-center gap-2">⚡ {conflict.reason}</span>}
+                  {error && <span className="text-red-400 flex items-center gap-2">Error: {error}</span>}
+                  {conflict && <span className="text-amber-400 flex items-center gap-2">Conflict: {conflict.reason}</span>}
                   {typingUser && !error && !conflict && (
                     <span className="text-sky-400 animate-pulse flex items-center gap-2">
                       <Zap size={12} /> {typingUser} is typing...
