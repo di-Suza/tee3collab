@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://tee3collab.onrender.com/api/$1" },
+    { "source": "/socket.io/(.*)", "destination": "https://tee3collab.onrender.com/socket.io/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

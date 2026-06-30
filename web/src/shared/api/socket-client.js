@@ -1,9 +1,8 @@
 import { io } from "socket.io-client";
 import { env } from "../utils/env.js";
 
-export const createSocketClient = (token = null) =>
+export const createSocketClient = () =>
   io(env.socketUrl, {
-    auth: token ? { token } : {},
     transports: ["websocket", "polling"],
     withCredentials: true,
   });

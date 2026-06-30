@@ -1,9 +1,9 @@
 import React from "react";
+import AuthService from "../services/auth.service.js";
 
 const HomePage = () => {
   const googleAuthhandler = () => {
-    // Redirect to the backend endpoint for Google OAuth
-    window.location.href = "https://tee3collab.onrender.com/api/v1/auth/google";
+    window.location.href = AuthService.googleAuthUrl();
   };
   const languages = [
     {
@@ -37,8 +37,8 @@ const HomePage = () => {
   ];
   const codeLines = [
     "import { User } from './models/User';",
-    "const response = await fetch('https://api.darkweb.x/auth', {",
-    "  headers: { Authorization: `Bearer ${token}` },",
+    "const response = await fetch('/api/v1/auth/me', {",
+    "  credentials: 'include',",
     "});",
   ];
   return (
